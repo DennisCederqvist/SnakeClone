@@ -1,6 +1,6 @@
 // main.js – bootstrap: kopplar ihop DOM, input och Game
 
-import { Game } from "./Game.js";
+import { Game } from "./game.js";
 
 window.addEventListener("load", () => {
 	const canvas = document.getElementById("gameCanvas");
