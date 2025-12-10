@@ -1,0 +1,10 @@
+
+
+#gameCanvas {
+	border: 6px solid #b076ff;           /* lila ram */
+	border-radius: 8px;
+	box-shadow: 0 0 20px rgb(255, 0, 0);
+	background-color: #111;              /* matchar spelets bakgrund */
+	display: block;
+	margin: 0px auto;
+}
