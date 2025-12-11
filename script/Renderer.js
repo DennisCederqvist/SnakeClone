@@ -3,73 +3,76 @@
 import { COLORS } from "./Config.js";
 
 export class Renderer {
-  constructor(canvas, cols, rows, cellSize) {
-    this.canvas = canvas;
-    this.ctx = canvas.getContext("2d");
+	constructor(canvas, cols, rows, cellSize) {
+		this.canvas = canvas;
+		this.ctx = canvas.getContext("2d");
 
-    this.cols = cols;
-    this.rows = rows;
-    this.cellSize = cellSize;
+		this.cols = cols;
+		this.rows = rows;
+		this.cellSize = cellSize;
 
-    // Sätt canvas storlek efter grid
-    this.canvas.width = this.cols * this.cellSize;
-    this.canvas.height = this.rows * this.cellSize;
-  }
-  render(state) {
-    const ctx = this.ctx;
+		// Sätt canvas storlek efter grid
+		this.canvas.width = this.cols * this.cellSize;
+		this.canvas.height = this.rows * this.cellSize;
+	}
 
-    // Bakgrund
-    ctx.fillStyle = COLORS.background;
-    ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+	render(state) {
+		const ctx = this.ctx;
 
-    // Rita spelplanens ram
-    ctx.strokeStyle = COLORS.borderStroke;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(0, 0, this.cols * this.cellSize, this.rows * this.cellSize);
+		// Bakgrund
+		ctx.fillStyle = COLORS.background;
+		ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
-    // Mat
-    if (state.food) {
-      const fx = (state.food.x + 0.5) * this.cellSize;
-      const fy = (state.food.y + 0.5) * this.cellSize;
-      const fr = this.cellSize / 2 - 2;
+		// Rita spelplanens ram
+		ctx.strokeStyle = COLORS.borderStroke;
+		ctx.lineWidth = 2;
+		ctx.strokeRect(0, 0, this.cols * this.cellSize, this.rows * this.cellSize);
 
-      ctx.beginPath();
-      ctx.arc(fx, fy, fr, 0, Math.PI * 2);
-      ctx.fillStyle = COLORS.foodFill;
-      ctx.fill();
-    }
+		// Mat – nu flera
+		if (state.foods && state.foods.length > 0) {
+			for (const food of state.foods) {
+				const fx = (food.x + 0.5) * this.cellSize;
+				const fy = (food.y + 0.5) * this.cellSize;
+				const fr = this.cellSize / 2 - 2;
 
-    // Ormar
-    for (const snake of state.snakes) {
-      const segments = snake.segments;
+				ctx.beginPath();
+				ctx.arc(fx, fy, fr, 0, Math.PI * 2);
+				ctx.fillStyle = COLORS.foodFill;
+				ctx.fill();
+			}
+		}
 
-      segments.forEach((seg, index) => {
-        const cx = (seg.x + 0.5) * this.cellSize;
-        const cy = (seg.y + 0.5) * this.cellSize;
+		// Ormar
+		for (const snake of state.snakes) {
+			const segments = snake.segments;
 
-        let r = this.cellSize / 2 - 2;
+			segments.forEach((seg, index) => {
+				const cx = (seg.x + 0.5) * this.cellSize;
+				const cy = (seg.y + 0.5) * this.cellSize;
 
-        // svanstipp mindre – styrs av snake.tailScale
-        if (index === segments.length - 1) {
-          r *= snake.tailScale ?? 0.6;
-        }
+				let r = this.cellSize / 2 - 2;
 
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+				// svanstipp mindre – styrs av snake.tailScale
+				if (index === segments.length - 1) {
+					r *= snake.tailScale ?? 0.6;
+				}
 
-        if (index === 0) {
-          // huvud
-          ctx.fillStyle = snake.colorHead;
-          ctx.strokeStyle = snake.colorHeadStroke;
-          ctx.lineWidth = 3;
-          ctx.fill();
-          ctx.stroke();
-        } else {
-          // kropp
-          ctx.fillStyle = snake.colorBody;
-          ctx.fill();
-        }
-      });
-    }
-  }
+				ctx.beginPath();
+				ctx.arc(cx, cy, r, 0, Math.PI * 2);
+
+				if (index === 0) {
+					// huvud
+					ctx.fillStyle = snake.colorHead;
+					ctx.strokeStyle = snake.colorHeadStroke;
+					ctx.lineWidth = 3;
+					ctx.fill();
+					ctx.stroke();
+				} else {
+					// kropp
+					ctx.fillStyle = snake.colorBody;
+					ctx.fill();
+				}
+			});
+		}
+	}
 }
