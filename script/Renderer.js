@@ -23,6 +23,9 @@ export class Renderer {
     ctx.fillStyle = COLORS.background;
     ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+    // === GRID (subtil Tron-guide) ===
+    this.drawGrid();
+
     // Ram runt spelplanen
     ctx.strokeStyle = COLORS.borderStroke;
     ctx.lineWidth = 2;
@@ -105,7 +108,6 @@ export class Renderer {
         const headPx = toPx(segments[0]);
 
         // Räkna ut riktning utifrån första två segmenten
-        // (förväntar sig grid-steg, men funkar även med interpolation)
         let angle = 0;
         if (segments.length >= 2) {
           const h = segments[0];
@@ -155,6 +157,41 @@ export class Renderer {
       }
     }
   }
+
+  // === GRID ===
+  drawGrid() {
+  const ctx = this.ctx;
+
+  ctx.save();
+
+  const w = this.canvas.width;
+  const h = this.canvas.height;
+
+  ctx.strokeStyle = COLORS.gridLine ?? "rgba(255, 255, 255, 0.08)";
+  ctx.lineWidth = 1;
+  ctx.shadowColor = COLORS.gridGlow ?? "rgba(0, 255, 255, 0.12)";
+  ctx.shadowBlur = Math.max(2, this.cellSize * 0.12);
+
+  // Vertikala linjer genom cell-centers
+  for (let c = 0; c < this.cols; c++) {
+    const x = (c + 0.5) * this.cellSize;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, h);
+    ctx.stroke();
+  }
+
+  // Horisontella linjer genom cell-centers
+  for (let r = 0; r < this.rows; r++) {
+    const y = (r + 0.5) * this.cellSize;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(w, y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
 
   /**
    * Bygger en ortogonal (endast horisontell/vertikal) punktlista från input.

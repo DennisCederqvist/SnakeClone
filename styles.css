@@ -11,6 +11,7 @@ body {
 
 h1, h2 {
   text-align: center;
+  color: cyan;
 }
 
 /* =========================
@@ -27,7 +28,7 @@ h1, h2 {
   width: min(92vw, 920px);
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: flex-end;
   gap: 16px;
   margin-bottom: 10px;
 }
@@ -39,17 +40,13 @@ h1, h2 {
 .game-wrap {
   width: min(92vw, 920px);
   position: relative;
-
   border: 6px solid #b076ff;
   border-radius: 8px;
   box-shadow: 0 0 20px rgb(255, 0, 0);
-
   overflow: hidden; /* så overlay aldrig läcker/”missar” */
 }
 
-/* =========================
-   CANVAS
-   ========================= */
+/* CANVAS */
 
 #gameCanvas {
   width: 100%;
@@ -58,9 +55,7 @@ h1, h2 {
   background: #111;
 }
 
-/* =========================
-   SCORE
-   ========================= */
+/* SCORE */
 
 .score-box {
   padding: 6px 10px;
@@ -74,9 +69,7 @@ h1, h2 {
   text-align: right;
 }
 
-/* =========================
-   OVERLAYS (START / GAME OVER)
-   ========================= */
+/* OVERLAYS (START / GAME OVER) */
 
 .overlay {
   position: absolute;
@@ -120,4 +113,32 @@ h1, h2 {
 .overlay__button:hover {
   transform: translateY(-2px);
   box-shadow: 0 0 25px rgba(123, 60, 255, 0.9);
+}
+
+.highscore {
+  display: flex;
+  margin-top: 18px;
+  padding: 20px 0px;
+  width: min(320px, 30%);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  flex-direction: column;
+  align-items: center;
+}
+
+.highscore__title {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.9;
+}
+
+.highscore__list {
+  margin: 0;
+  padding-left: 18px;
+  text-align: left;
+  line-height: 1.6;
+  font-size: 0.95rem;
 }

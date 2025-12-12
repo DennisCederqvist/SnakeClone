@@ -1,12 +1,15 @@
-// UiManager.js – hanterar startskärm och game over (senare: multiplayer UI)
+// UiManager.js – hanterar startskärm, game over och highscores
+
+import { loadHighscores, saveHighscore } from "./HighscoreStore.js";
 
 export class UiManager {
 	constructor(game) {
 		this.game = game;
 
-		// Startskärm
+		// === STARTSKÄRM ===
 		this.startScreen = document.getElementById("startScreen");
 		this.startButton = document.getElementById("startButton");
+		this.highscoreList = document.getElementById("highscoreList");
 
 		if (this.startButton) {
 			this.startButton.addEventListener("click", () => {
@@ -15,7 +18,7 @@ export class UiManager {
 			});
 		}
 
-		// Game Over-skärm
+		// === GAME OVER ===
 		this.deathScreen = document.getElementById("deathScreen");
 		this.finalScoreEl = document.getElementById("finalScore");
 		this.restartButton = document.getElementById("restartButton");
@@ -27,10 +30,25 @@ export class UiManager {
 			});
 		}
 
-		// Koppla game → UI (när spelaren dör)
+		// === KOPPLA GAME → UI ===
 		this.game.setOnPlayerDeath(({ score }) => {
+			saveHighscore(score);
+			this.renderHighscores();
 			this.showDeathScreen(score);
 		});
+
+		// Visa highscores direkt när sidan laddas
+		this.renderHighscores();
+	}
+
+	// =========================
+	// START SCREEN
+	// =========================
+
+	showStartScreen() {
+		if (this.startScreen) {
+			this.startScreen.classList.remove("hidden");
+		}
 	}
 
 	hideStartScreen() {
@@ -39,11 +57,9 @@ export class UiManager {
 		}
 	}
 
-	showStartScreen() {
-		if (this.startScreen) {
-			this.startScreen.classList.remove("hidden");
-		}
-	}
+	// =========================
+	// GAME OVER
+	// =========================
 
 	showDeathScreen(score) {
 		if (this.finalScoreEl) {
@@ -58,5 +74,24 @@ export class UiManager {
 		if (this.deathScreen) {
 			this.deathScreen.classList.add("hidden");
 		}
+	}
+
+	// =========================
+	// HIGHSCORES
+	// =========================
+
+	renderHighscores() {
+		if (!this.highscoreList) return;
+
+		const highscores = loadHighscores();
+
+		this.highscoreList.innerHTML = highscores.length
+			? highscores
+					.map(
+						(h) =>
+							`<li>${h.score} <span style="opacity:.6">(${h.date})</span></li>`
+					)
+					.join("")
+			: `<li style="opacity:.7">No scores yet</li>`;
 	}
 }

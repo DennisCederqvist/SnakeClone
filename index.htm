@@ -8,7 +8,7 @@
   </head>
 
   <body>
-    <h1>Snake 'em</h1>
+    <h1>Trake 'em</h1>
 
     <section class="game-section">
       <div class="game-ui">
@@ -20,9 +20,12 @@
           </p>
         </div>
 
+         
         <div id="scoreBox" class="score-box">
           Score: <span id="score">0</span>
         </div>
+
+
       </div>
 
       <!-- Wrapper som “äger” canvas + overlays -->
@@ -31,9 +34,10 @@
 
         <!-- Startskärm (NU: bara över spelplanen) -->
         <div id="startScreen" class="overlay">
-          <h1 class="overlay__title">Snake 'Em</h1>
+          <h1 class="overlay__title">Trake 'Em</h1>
           <button id="startButton" class="overlay__button">Start</button>
         </div>
+        
 
         <!-- Game Over (NU: bara över spelplanen) -->
         <div id="deathScreen" class="overlay hidden">
@@ -42,6 +46,13 @@
             You scored <span id="finalScore">0</span> Points
           </p>
           <button id="restartButton" class="overlay__button">Play Again!</button>
+
+          <div id="highscoreBox" class="highscore">
+            <h3 class="highscore__title">Highscores</h3>
+            <ol id="highscoreList" class="highscore__list"></ol>
+          </div>
+
+
         </div>
       </div>
     </section>
