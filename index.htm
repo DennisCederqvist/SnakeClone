@@ -1,62 +1,68 @@
 <!DOCTYPE html>
 <html lang="sv">
   <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Snake Game</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css" />
   </head>
 
   <body>
     <h1>Snake 'em</h1>
 
-    <!-- Startskärm -->
-    <div id="startScreen" class="overlay">
-      <h1 class="overlay__title">Snake 'Em</h1>
-      <button id="startButton" class="overlay__button">Start</button>
-    </div>
+    <section class="game-section">
+      <div class="game-ui">
+        <div class="game-ui__left">
+          <h2>Singleplayer</h2>
+          <p>
+            Use Arrows to control the snake<br />
+            Use space for a speedboost.
+          </p>
+        </div>
 
-    <!-- Game Over-skärm -->
-    <div id="deathScreen" class="overlay hidden">
-      <h2 class="overlay__title">Game Over</h2>
-      <p class="overlay__text">
-        Du fick <span id="finalScore">0</span> Score
-      </p>
-      <button id="restartButton" class="overlay__button">Spela igen</button>
-    </div>
-
-    <section>
-      <h2>Singleplayer</h2>
-      <p>Use Arrows to control the snake <br> Use space for a speedboost.</p>
-
-      <!-- Wrapper runt canvas + poäng -->
-      <div class="game-container">
-        <canvas id="gameCanvas"></canvas>
-
-        <!-- Poäng-box i hörnet -->
         <div id="scoreBox" class="score-box">
           Score: <span id="score">0</span>
         </div>
       </div>
+
+      <!-- Wrapper som “äger” canvas + overlays -->
+      <div class="game-wrap">
+        <canvas id="gameCanvas"></canvas>
+
+        <!-- Startskärm (NU: bara över spelplanen) -->
+        <div id="startScreen" class="overlay">
+          <h1 class="overlay__title">Snake 'Em</h1>
+          <button id="startButton" class="overlay__button">Start</button>
+        </div>
+
+        <!-- Game Over (NU: bara över spelplanen) -->
+        <div id="deathScreen" class="overlay hidden">
+          <h2 class="overlay__title">Game Over</h2>
+          <p class="overlay__text">
+            You scored <span id="finalScore">0</span> Points
+          </p>
+          <button id="restartButton" class="overlay__button">Play Again!</button>
+        </div>
+      </div>
     </section>
 
-    <hr>
+    <hr />
 
     <section>
       <h2>Multiplayer (kommer senare)</h2>
 
       <button id="hostButton">Host Game</button>
-      <br><br>
+      <br /><br />
 
-      <input type="text" id="joinSessionInput" placeholder="Enter Session ID to Join">
-      <br>
-      <input type="text" id="joinNameInput" placeholder="Enter Your Name">
+      <input type="text" id="joinSessionInput" placeholder="Enter Session ID to Join" />
+      <br />
+      <input type="text" id="joinNameInput" placeholder="Enter Your Name" />
       <button id="joinButton">Join Game</button>
 
-      <br><br>
+      <br /><br />
       <button id="sendButton">Send Test Command</button>
 
-      <br><br>
+      <br /><br />
       <div id="status"></div>
     </section>
 

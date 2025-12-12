@@ -20,10 +20,10 @@ export class Game {
 		this.score = 0;
 
 		// Hastighet + paus
-		this.baseMoveDuration = 120;
+		this.baseMoveDuration = 120;               // ms per steg
 		this.moveDuration = this.baseMoveDuration;
 		this.isBoosting = false;
-		this.isRunning = false;   // ⬅ nytt: spelet startar pausat
+		this.isRunning = false;                    // ⬅ spelet startar pausat
 
 		this.lastSegments = null;
 		this.moveProgress = 0;
@@ -31,18 +31,25 @@ export class Game {
 
 		this.foodSpawnToken = 0;
 
-		this.reset();      // ⬅ förbereder state
-		this.startLoop();  // ⬅ startar bara render-loop, inte spelet
+		this.onPlayerDeath = null;                 // callback som UI sätter
+
+		this.reset();      // förbered world state
+		this.startLoop();  // starta render-loop (men inte själva spelet)
 	}
 
-	// Kör igång själva spelet (efter startskärm)
+	// Kallas från UI när man trycker "Play" eller "Play Again"
 	startGame() {
 		this.reset();
 		this.isRunning = true;
 	}
 
+	// UI kan registrera en callback som triggas när spelaren dör
+	setOnPlayerDeath(callback) {
+		this.onPlayerDeath = callback;
+	}
+
 	reset() {
-		// Ogiltigförklara gamla food-timers
+		// ogiltigförklara gamla food-timers
 		this.foodSpawnToken++;
 
 		const dirs = [
@@ -54,6 +61,7 @@ export class Game {
 
 		const startDir = dirs[Math.floor(Math.random() * dirs.length)];
 
+		// Start i mitten
 		const startX = Math.floor(this.cols / 2);
 		const startY = Math.floor(this.rows / 2);
 
@@ -74,7 +82,6 @@ export class Game {
 		this.lastSegments = this.snake.segments.map(seg => ({ ...seg }));
 		this.moveProgress = 0;
 
-		// Vi rör inte isRunning här
 		this.isBoosting = false;
 		this.moveDuration = this.baseMoveDuration;
 	}
@@ -90,12 +97,14 @@ export class Game {
 		}
 	}
 
+	// Spawn:a startmaten direkt
 	spawnInitialFood() {
 		for (let i = 0; i < FOOD_COUNT; i++) {
 			this.spawnFood();
 		}
 	}
 
+	// Spawn:a EN matbit på en tom ruta (om vi inte redan har max)
 	spawnFood() {
 		if (this.foods.length >= FOOD_COUNT) return;
 
@@ -116,9 +125,10 @@ export class Game {
 		}
 	}
 
+	// Schemalägg respawn med delay 0.5–3 sek
 	scheduleFoodRespawn() {
 		const tokenAtSchedule = this.foodSpawnToken;
-		const delay = 500 + Math.random() * 2500; // 0.5s – 3s
+		const delay = 500 + Math.random() * 2500;
 
 		setTimeout(() => {
 			if (tokenAtSchedule !== this.foodSpawnToken) return;
@@ -136,7 +146,7 @@ export class Game {
 		const delta = timestamp - this.lastTime;
 		this.lastTime = timestamp;
 
-		// Om spelet inte körs → bara rendera nu-läget och fortsätt loopa
+		// Om spelet är pausat: bara rita current state
 		if (!this.isRunning) {
 			this.render(this.moveProgress);
 			requestAnimationFrame(this.loop.bind(this));
@@ -161,6 +171,7 @@ export class Game {
 		this.snake.step();
 		const head = this.snake.segments[0];
 
+		// Väggkollision
 		if (
 			head.x < 0 ||
 			head.x >= this.cols ||
@@ -171,6 +182,7 @@ export class Game {
 			return;
 		}
 
+		// Egen kropp
 		for (let i = 1; i < this.snake.segments.length; i++) {
 			const seg = this.snake.segments[i];
 			if (seg.x === head.x && seg.y === head.y) {
@@ -179,6 +191,7 @@ export class Game {
 			}
 		}
 
+		// Matkollision
 		const eatenIndex = this.foods.findIndex(
 			(food) => food.x === head.x && food.y === head.y
 		);
@@ -194,8 +207,13 @@ export class Game {
 	}
 
 	handleDeath() {
-		// Just nu: direkt respawn, fortfarande running
-		this.reset();
+		// Pausa spelet
+		this.isRunning = false;
+
+		// Låt UI ta hand om overlay osv
+		if (this.onPlayerDeath) {
+			this.onPlayerDeath({ score: this.score });
+		}
 	}
 
 	render(progress = 1) {

@@ -18,6 +18,7 @@ window.addEventListener("load", () => {
 			event.preventDefault();
 			game.handleKeyDown(event.key);
 		} else if (event.key === " ") {
+			// Space → speedboost
 			event.preventDefault();
 			game.handleKeyDown("Space");
 		}
