@@ -24,7 +24,7 @@ export class MultiplayerGame {
 
     this.renderer = new Renderer(this.canvas, this.cols, this.rows, this.cellSize);
 
-    this.players = players; // Map clientId -> {name, ready, slot}
+    this.players = players;
     this.hostClientId = hostClientId;
 
     this.onBroadcastState = onBroadcastState;
@@ -33,10 +33,7 @@ export class MultiplayerGame {
     this.isRunning = false;
     this.lastTime = null;
 
-    // vi håller en gemensam “render frame”, men rörelse per orm kan bli snabbare/långsammare
     this.baseMoveDuration = 120;
-    this.moveDuration = this.baseMoveDuration;
-    this.moveProgress = 0;
 
     this.foods = [];
     this.powerUps = new PowerUpManager({
@@ -48,20 +45,26 @@ export class MultiplayerGame {
     });
 
     // host only
-    this.snakes = new Map(); // clientId -> { snake, score, alive, effects, lastSegments }
+    // clientId -> { snake, score, alive, effects, lastSegments, moveProgress }
+    this.snakes = new Map();
     this.pendingKeys = new Map();
-    this.tickId = 0;
 
-    // client smoothing (tick->tick)
-    this.prevTickState = null;
-    this.currTickState = null;
-    this.tickReceivedAt = 0;
+    // network send throttling (host)
+    this.tickId = 0;
+    this.sendAccum = 0;
+    this.sendIntervalMs = 50; // ~20 Hz
+
+    // client smoothing between snapshots
+    this.prevState = null;
+    this.currState = null;
+    this.lastRecvAt = 0;
+    this.currRecvAt = 0;
+    this.avgInterval = 60; // ms, adaptive
   }
 
   start() {
     this.isRunning = true;
     this.lastTime = performance.now();
-    this.moveProgress = 0;
 
     if (this.mode === "host") {
       this.resetHostWorld();
@@ -74,6 +77,8 @@ export class MultiplayerGame {
     this.isRunning = false;
   }
 
+  // ================= INPUT =================
+
   applyRemoteInput(clientId, key) {
     if (this.mode !== "host") return;
     this.pendingKeys.set(clientId, key);
@@ -82,14 +87,22 @@ export class MultiplayerGame {
   applyRemoteState(state) {
     if (this.mode !== "client") return;
     if (!state || typeof state !== "object") return;
-    if (typeof state.tickId !== "number") return;
 
-    if (this.currTickState && state.tickId <= this.currTickState.tickId) return;
+    const now = performance.now();
+    this.lastRecvAt = this.currRecvAt || now;
+    this.currRecvAt = now;
 
-    this.prevTickState = this.currTickState;
-    this.currTickState = state;
-    this.tickReceivedAt = performance.now();
+    const interval = this.currRecvAt - this.lastRecvAt;
+    if (interval > 5 && interval < 500) {
+      // EMA för stabil interpolation även om nätet jitterar
+      this.avgInterval = this.avgInterval * 0.85 + interval * 0.15;
+    }
+
+    this.prevState = this.currState;
+    this.currState = state;
   }
+
+  // ================= LOOP =================
 
   loop(t) {
     if (!this.isRunning) return;
@@ -98,18 +111,9 @@ export class MultiplayerGame {
     this.lastTime = t;
 
     if (this.mode === "host") {
-      this.moveProgress += delta / this.moveDuration;
-
-      while (this.moveProgress >= 1) {
-        this.moveProgress -= 1;
-        this.tickHost(t);
-      }
-
-      const renderState = this.buildHostInterpolatedRenderState(this.moveProgress);
-      this.renderer.render(renderState);
+      this.hostFrame(t, delta);
     } else {
-      const renderState = this.buildClientInterpolatedState();
-      this.renderer.render(renderState);
+      this.clientFrame();
     }
 
     requestAnimationFrame(this.loop.bind(this));
@@ -122,6 +126,7 @@ export class MultiplayerGame {
     this.snakes.clear();
     this.pendingKeys.clear();
     this.tickId = 0;
+    this.sendAccum = 0;
 
     const ids = Array.from(this.players.keys()).sort();
     const spawns = this.makeSpawnPoints(ids.length);
@@ -145,6 +150,7 @@ export class MultiplayerGame {
         alive: true,
         effects: new PowerUpManager({ cols: this.cols, rows: this.rows, maxCount: 0, respawnMinMs: 0, respawnMaxMs: 0 }),
         lastSegments: snake.segments.map((s) => ({ ...s })),
+        moveProgress: 0,
       });
     }
 
@@ -152,8 +158,6 @@ export class MultiplayerGame {
 
     this.powerUps.reset();
     this.powerUps.initSpawn((x, y) => this.isCellBlockedHost(x, y));
-
-    this.broadcastTickState(performance.now());
   }
 
   makeSpawnPoints(n) {
@@ -167,14 +171,12 @@ export class MultiplayerGame {
     return Array.from({ length: n }, (_, i) => pts[i] ?? pts[0]);
   }
 
-  tickHost(now) {
-    this.tickId += 1;
-
-    // uppdatera globala powerups + alla effekter per orm
+  hostFrame(now, delta) {
+    // uppdatera powerups + effekter
     this.powerUps.update(now);
     for (const e of this.snakes.values()) e.effects.update(now);
 
-    // apply inputs (queued)
+    // apply inputs (senaste riktning per spelare)
     for (const [cid, key] of this.pendingKeys.entries()) {
       const entry = this.snakes.get(cid);
       if (!entry?.alive) continue;
@@ -187,72 +189,69 @@ export class MultiplayerGame {
     }
     this.pendingKeys.clear();
 
-    // snapshot innan rörelse (för host interpolation)
-    for (const entry of this.snakes.values()) {
-      if (!entry.alive) continue;
-      entry.lastSegments = entry.snake.segments.map((s) => ({ ...s }));
-    }
-
-    // === Rörelse per orm, med speed/slow som i singleplayer ===
+    // simulera varje orm med smooth accumulator (ingen “teleport” på speed/slow)
     for (const [cid, entry] of this.snakes.entries()) {
       if (!entry.alive) continue;
 
-      const mult = this.getSnakeSpeedMultiplier(entry);
-      const stepsThisTick = this.computeStepsThisTick(mult);
+      const mult = this.getSpeedMultiplier(entry); // SPEED/ SLOW
+      const duration = this.baseMoveDuration / mult;
 
-      for (let step = 0; step < stepsThisTick; step++) {
-        if (!entry.alive) break;
+      entry.moveProgress += delta / duration;
+
+      while (entry.moveProgress >= 1) {
+        entry.moveProgress -= 1;
+
+        // snapshot före step för interpolation
+        entry.lastSegments = entry.snake.segments.map((s) => ({ ...s }));
 
         entry.snake.step();
+        this.tickId += 1; // global counter, bara för debug/ordering
 
-        // efter varje step: collisions + pickups
         this.resolveAfterStep(cid, entry, now);
+
+        if (!entry.alive) break;
       }
     }
 
-    // hålla powerups på banan
+    // håll powerups på banan
     this.powerUps.ensureSpawn((x, y) => this.isCellBlockedHost(x, y));
 
-    // sänd state EN gång per tick (minskar stutter)
-    this.broadcastTickState(now);
+    // render host smooth (per orm progress)
+    const renderState = this.buildHostRenderState();
+    this.renderer.render(renderState);
+
+    // broadcast throttled (minskar nät-stutter)
+    this.sendAccum += delta;
+    if (this.sendAccum >= this.sendIntervalMs) {
+      this.sendAccum = 0;
+      this.onBroadcastState?.(this.buildSnapshotState());
+    }
 
     const aliveCount = Array.from(this.snakes.values()).filter((e) => e.alive).length;
     if (aliveCount <= 1) this.endGameHost();
   }
 
-  getSnakeSpeedMultiplier(entry) {
+  getSpeedMultiplier(entry) {
     let mult = 1;
-
     if (entry.effects.isActive(PowerUpType.SPEED)) mult *= EFFECT.SPEED_MULT;
     if (entry.effects.isActive(PowerUpType.SLOW)) mult *= EFFECT.SLOW_MULT;
-
-    return mult;
-  }
-
-  computeStepsThisTick(mult) {
-    // baseline: 1 cell per tick
-    // speed: ibland 2 steg (snitt = mult)
-    // slow: ibland 0 steg (snitt = mult)
-    if (mult >= 1) {
-      const extra = mult - 1;
-      return 1 + (Math.random() < extra ? 1 : 0);
-    } else {
-      return Math.random() < mult ? 1 : 0;
-    }
+    return Math.max(0.35, Math.min(3.0, mult));
   }
 
   resolveAfterStep(cid, entry, now) {
     const head = entry.snake.segments[0];
 
-    // walls (alltid dödliga)
+    // väggar: fortfarande dödligt
     if (head.x < 0 || head.x >= this.cols || head.y < 0 || head.y >= this.rows) {
       entry.alive = false;
       return;
     }
 
-    // self collision (ghost ignorerar self-collision – exakt som Config.js säger)
     const ghost = entry.effects.isActive(PowerUpType.GHOST);
+
+    // ghost: IGNORERA ALLA SVANSKOLLISIONER (egen + andras)
     if (!ghost) {
+      // self
       for (let i = 1; i < entry.snake.segments.length; i++) {
         const seg = entry.snake.segments[i];
         if (seg.x === head.x && seg.y === head.y) {
@@ -260,34 +259,50 @@ export class MultiplayerGame {
           return;
         }
       }
-    }
 
-    // collision with others (alltid dödligt i multiplayer)
-    for (const [oid, other] of this.snakes.entries()) {
-      if (!other.alive) continue;
+      // others
+      for (const [oid, other] of this.snakes.entries()) {
+        if (!other.alive) continue;
+        if (oid === cid) continue;
 
-      const segs = other.snake.segments;
-      const start = oid === cid ? 1 : 0;
-
-      for (let i = start; i < segs.length; i++) {
-        const seg = segs[i];
-        if (seg.x === head.x && seg.y === head.y) {
-          entry.alive = false;
-          return;
+        for (const seg of other.snake.segments) {
+          if (seg.x === head.x && seg.y === head.y) {
+            entry.alive = false;
+            return;
+          }
         }
       }
     }
 
-    // pickup powerup
+    // powerup pickup
     const picked = this.powerUps.collectAt(head.x, head.y);
     if (picked) {
-      if (picked.type === PowerUpType.SPEED) entry.effects.activate(PowerUpType.SPEED, now, EFFECT.SPEED_MS);
-      else if (picked.type === PowerUpType.SLOW) entry.effects.activate(PowerUpType.SLOW, now, EFFECT.SLOW_MS);
-      else if (picked.type === PowerUpType.GHOST) entry.effects.activate(PowerUpType.GHOST, now, EFFECT.GHOST_MS);
-      else if (picked.type === PowerUpType.SHRINK) entry.snake.shrink(EFFECT.SHRINK_AMOUNT, EFFECT.MIN_SNAKE_LEN);
+      // SPEED: bara mig
+      if (picked.type === PowerUpType.SPEED) {
+        entry.effects.activate(PowerUpType.SPEED, now, EFFECT.SPEED_MS);
+      }
+
+      // SLOW: alla ANDRA (inte mig)
+      else if (picked.type === PowerUpType.SLOW) {
+        for (const [oid, other] of this.snakes.entries()) {
+          if (oid === cid) continue;
+          if (!other.alive) continue;
+          other.effects.activate(PowerUpType.SLOW, now, EFFECT.SLOW_MS);
+        }
+      }
+
+      // GHOST: bara mig (men gäller mot allas svansar pga collision-check ovan)
+      else if (picked.type === PowerUpType.GHOST) {
+        entry.effects.activate(PowerUpType.GHOST, now, EFFECT.GHOST_MS);
+      }
+
+      // SHRINK: bara mig
+      else if (picked.type === PowerUpType.SHRINK) {
+        entry.snake.shrink(EFFECT.SHRINK_AMOUNT, EFFECT.MIN_SNAKE_LEN);
+      }
     }
 
-    // eat food
+    // food
     const idx = this.foods.findIndex((f) => f.x === head.x && f.y === head.y);
     if (idx !== -1) {
       entry.snake.grow();
@@ -297,47 +312,7 @@ export class MultiplayerGame {
     }
   }
 
-  broadcastTickState(now) {
-    const tickState = this.buildTickState(now);
-    this.onBroadcastState?.(tickState);
-  }
-
-  buildTickState(now) {
-    const snakes = [];
-    for (const [cid, entry] of this.snakes.entries()) {
-      if (!entry.alive) continue;
-
-      const slot = this.players.get(cid)?.slot ?? 1;
-      const c = colorsForSlot(slot);
-
-      snakes.push({
-        clientId: cid,
-        segments: entry.snake.segments.map((s) => ({ x: s.x, y: s.y })),
-        mpColorBody: c.body,
-        mpColorGlow: c.glow,
-      });
-    }
-
-    const scores = Array.from(this.snakes.entries()).map(([cid, e]) => ({
-      clientId: cid,
-      name: this.players.get(cid)?.name ?? cid,
-      score: e.score ?? 0,
-      alive: !!e.alive,
-      slot: this.players.get(cid)?.slot ?? 1,
-    }));
-
-    return {
-      tickId: this.tickId,
-      moveDuration: this.baseMoveDuration, // clients använder detta för interpolationstempo
-      snakes,
-      foods: this.foods,
-      powerUps: this.powerUps.powerUps,
-      scores,
-      serverNow: now,
-    };
-  }
-
-  buildHostInterpolatedRenderState(progress) {
+  buildHostRenderState() {
     const snakes = [];
 
     for (const [cid, entry] of this.snakes.entries()) {
@@ -348,13 +323,14 @@ export class MultiplayerGame {
 
       const cur = entry.snake.segments;
       const last = entry.lastSegments ?? cur;
+      const p = Math.max(0, Math.min(1, entry.moveProgress));
 
       const segs = cur.map((seg, i) => {
         const prev = last[i];
         if (!prev) return { x: seg.x, y: seg.y };
         return {
-          x: prev.x + (seg.x - prev.x) * progress,
-          y: prev.y + (seg.y - prev.y) * progress,
+          x: prev.x + (seg.x - prev.x) * p,
+          y: prev.y + (seg.y - prev.y) * p,
         };
       });
 
@@ -370,14 +346,44 @@ export class MultiplayerGame {
       snakes,
       foods: this.foods,
       powerUps: this.powerUps.powerUps,
-      scores: Array.from(this.snakes.entries()).map(([cid, e]) => ({
-        clientId: cid,
-        name: this.players.get(cid)?.name ?? cid,
-        score: e.score ?? 0,
-        alive: !!e.alive,
-        slot: this.players.get(cid)?.slot ?? 1,
-      })),
+      scores: this.buildScores(),
     };
+  }
+
+  buildSnapshotState() {
+    // skickas till clients (grid coords, inget float)
+    const snakes = [];
+    for (const [cid, entry] of this.snakes.entries()) {
+      if (!entry.alive) continue;
+
+      const slot = this.players.get(cid)?.slot ?? 1;
+      const c = colorsForSlot(slot);
+
+      snakes.push({
+        clientId: cid,
+        segments: entry.snake.segments.map((s) => ({ x: s.x, y: s.y })),
+        mpColorBody: c.body,
+        mpColorGlow: c.glow,
+      });
+    }
+
+    return {
+      tickId: this.tickId,
+      snakes,
+      foods: this.foods,
+      powerUps: this.powerUps.powerUps,
+      scores: this.buildScores(),
+    };
+  }
+
+  buildScores() {
+    return Array.from(this.snakes.entries()).map(([cid, e]) => ({
+      clientId: cid,
+      name: this.players.get(cid)?.name ?? cid,
+      score: e.score ?? 0,
+      alive: !!e.alive,
+      slot: this.players.get(cid)?.slot ?? 1,
+    }));
   }
 
   spawnFoodHost() {
@@ -418,17 +424,21 @@ export class MultiplayerGame {
 
   // ================= CLIENT =================
 
+  clientFrame() {
+    const state = this.buildClientInterpolatedState();
+    this.renderer.render(state);
+  }
+
   buildClientInterpolatedState() {
-    if (!this.currTickState) return { snakes: [], foods: [], powerUps: [], scores: [] };
-    if (!this.prevTickState) return this.currTickState;
+    if (!this.currState) return { snakes: [], foods: [], powerUps: [], scores: [] };
+    if (!this.prevState) return this.currState;
 
     const now = performance.now();
-    const dt = now - this.tickReceivedAt;
-    const duration = Math.max(40, Number(this.currTickState.moveDuration ?? 120));
-    const alpha = Math.max(0, Math.min(1, dt / duration));
+    // render lite “bakom” genom att använda avgInterval som tempo
+    const alpha = Math.max(0, Math.min(1, (now - this.currRecvAt) / Math.max(16, this.avgInterval)));
 
-    const prevSnakes = new Map((this.prevTickState.snakes ?? []).map((s) => [s.clientId, s]));
-    const currSnakes = new Map((this.currTickState.snakes ?? []).map((s) => [s.clientId, s]));
+    const prevSnakes = new Map((this.prevState.snakes ?? []).map((s) => [s.clientId, s]));
+    const currSnakes = new Map((this.currState.snakes ?? []).map((s) => [s.clientId, s]));
 
     const snakes = [];
     for (const [cid, cur] of currSnakes.entries()) {
@@ -452,9 +462,9 @@ export class MultiplayerGame {
 
     return {
       snakes,
-      foods: this.currTickState.foods ?? [],
-      powerUps: this.currTickState.powerUps ?? [],
-      scores: this.currTickState.scores ?? [],
+      foods: this.currState.foods ?? [],
+      powerUps: this.currState.powerUps ?? [],
+      scores: this.currState.scores ?? [],
     };
   }
 }
