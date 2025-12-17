@@ -20,26 +20,70 @@
           </p>
         </div>
 
-         
         <div id="scoreBox" class="score-box">
           Score: <span id="score">0</span>
         </div>
-
-
       </div>
 
-      <!-- Wrapper som “äger” canvas + overlays -->
       <div class="game-wrap">
         <canvas id="gameCanvas"></canvas>
 
-        <!-- Startskärm (NU: bara över spelplanen) -->
+        <!-- Start -->
         <div id="startScreen" class="overlay">
           <h1 class="overlay__title">Trake 'Em</h1>
-          <button id="startButton" class="overlay__button">Start</button>
+          <button id="startButton" class="overlay__button">Singleplayer</button>
+          <button id="multiplayerButton" class="overlay__button">Multiplayer</button>
         </div>
-        
 
-        <!-- Game Over (NU: bara över spelplanen) -->
+        <!-- Lobby -->
+        <div id="lobbyScreen" class="overlay hidden">
+          <h2 class="overlay__title">Lobby</h2>
+
+          <div class="overlay__panel">
+            <label class="overlay__label" for="playerNameInput">Name</label>
+            <input
+              id="playerNameInput"
+              class="overlay__input"
+              type="text"
+              placeholder="Your name"
+              maxlength="18"
+              autocomplete="off"
+            />
+
+            <p class="overlay__text" style="margin-top: 10px">
+              Lobby code: <span id="lobbyCode" class="mono"></span>
+            </p>
+
+            <div class="lobby-actions">
+              <button id="hostLobbyButton" class="overlay__button">Host</button>
+
+              <div class="join-row">
+                <input
+                  id="joinCodeInput"
+                  class="overlay__input mono"
+                  type="text"
+                  placeholder="Enter lobby code"
+                  autocomplete="off"
+                />
+                <button id="joinLobbyButton" class="overlay__button">Join</button>
+              </div>
+
+              <div class="ready-row">
+                <button id="readyButton" class="overlay__button">Ready</button>
+                <button id="leaveLobbyButton" class="overlay__button overlay__button--ghost">
+                  Leave
+                </button>
+              </div>
+
+              <p id="countdown" class="overlay__text countdown"></p>
+
+              <h3 class="overlay__subtitle">Players</h3>
+              <ol id="lobbyPlayersList" class="highscore__list"></ol>
+            </div>
+          </div>
+        </div>
+
+        <!-- Game Over (singleplayer) -->
         <div id="deathScreen" class="overlay hidden">
           <h2 class="overlay__title">Game Over</h2>
           <p class="overlay__text">
@@ -51,30 +95,22 @@
             <h3 class="highscore__title">Highscores</h3>
             <ol id="highscoreList" class="highscore__list"></ol>
           </div>
+        </div>
 
+        <!-- Winner (multiplayer) -->
+        <div id="winnerScreen" class="overlay hidden">
+          <h2 id="winnerTitle" class="overlay__title">Winner</h2>
 
+          <div class="overlay__panel">
+            <ol id="winnerList" class="highscore__list"></ol>
+
+            <div class="winner-actions">
+              <button id="winnerSingleButton" class="overlay__button">Singleplayer</button>
+              <button id="winnerMultiButton" class="overlay__button">Multiplayer</button>
+            </div>
+          </div>
         </div>
       </div>
-    </section>
-
-    <hr />
-
-    <section>
-      <h2>Multiplayer (kommer senare)</h2>
-
-      <button id="hostButton">Host Game</button>
-      <br /><br />
-
-      <input type="text" id="joinSessionInput" placeholder="Enter Session ID to Join" />
-      <br />
-      <input type="text" id="joinNameInput" placeholder="Enter Your Name" />
-      <button id="joinButton">Join Game</button>
-
-      <br /><br />
-      <button id="sendButton">Send Test Command</button>
-
-      <br /><br />
-      <div id="status"></div>
     </section>
 
     <script type="module" src="script/main.js"></script>

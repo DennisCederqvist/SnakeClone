@@ -1,4 +1,6 @@
 // Renderer.js – Tron-style + grid + mat + powerups
+// Fix: Singleplayer ska alltid vara cyan + original-tjocklek.
+// Multiplayer-färger används bara om mpColorBody/mpColorGlow finns.
 
 import { COLORS } from "./Config.js";
 import { PowerUpType } from "./PowerUps.js";
@@ -33,12 +35,10 @@ export class Renderer {
 
     // === POWERUPS ===
     if (state.powerUps?.length) {
-      for (const p of state.powerUps) {
-        this.drawPowerUp(p);
-      }
+      for (const p of state.powerUps) this.drawPowerUp(p);
     }
 
-    // === MAT (neon-orb) ===
+    // === MAT ===
     if (state.foods?.length) {
       for (const food of state.foods) {
         const fx = (food.x + 0.5) * this.cellSize;
@@ -80,7 +80,12 @@ export class Renderer {
         const points = segments.map(toPx);
         const ortho = this._makeOrthoPath(points);
 
-        // Trail
+        // Singleplayer/default: ALLTID cyan
+        // Multiplayer: använd bara mpColor* om det finns (vi skickar dem i MultiplayerGame)
+        const glow = snake.mpColorGlow ?? "rgba(0, 255, 255, 0.85)";
+        const core = snake.mpColorBody ?? "rgba(200, 255, 255, 0.95)";
+
+        // Trail (tunnare – tillbaka mot original)
         ctx.save();
 
         ctx.beginPath();
@@ -91,20 +96,20 @@ export class Renderer {
         ctx.lineJoin = "miter";
         ctx.miterLimit = 2;
 
-        ctx.strokeStyle = "rgba(0, 255, 255, 0.22)";
-        ctx.lineWidth = Math.max(2, this.cellSize * 0.34);
-        ctx.shadowColor = "rgba(0, 255, 255, 0.85)";
-        ctx.shadowBlur = Math.max(6, this.cellSize * 0.7);
+        ctx.strokeStyle = glow;
+        ctx.lineWidth = Math.max(2, this.cellSize * 0.26);
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = Math.max(6, this.cellSize * 0.55);
         ctx.stroke();
 
         ctx.shadowBlur = 0;
-        ctx.strokeStyle = "rgba(200, 255, 255, 0.95)";
-        ctx.lineWidth = Math.max(2, this.cellSize * 0.16);
+        ctx.strokeStyle = core;
+        ctx.lineWidth = Math.max(2, this.cellSize * 0.12);
         ctx.stroke();
 
         ctx.restore();
 
-        // Head
+        // Head (behåll form – cyan)
         const headPx = toPx(segments[0]);
 
         let angle = 0;
@@ -122,11 +127,11 @@ export class Renderer {
         ctx.translate(headPx.x, headPx.y);
         ctx.rotate(angle);
 
-        ctx.shadowColor = "rgba(0, 255, 255, 0.9)";
-        ctx.shadowBlur = Math.max(6, this.cellSize * 0.6);
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = Math.max(6, this.cellSize * 0.55);
 
         ctx.fillStyle = "rgba(0, 255, 255, 0.28)";
-        ctx.strokeStyle = "rgba(200, 255, 255, 0.95)";
+        ctx.strokeStyle = core;
         ctx.lineWidth = 2;
 
         roundRect(ctx, -headW / 2, -headH / 2, headW, headH, radius);
@@ -157,7 +162,6 @@ export class Renderer {
     const px = (p.x + 0.5) * this.cellSize;
     const py = (p.y + 0.5) * this.cellSize;
 
-    // olika färger per typ
     let glow = "rgba(255,255,0,0.85)";
     let fill = "rgba(255,255,0,0.20)";
     let core = "rgba(255,255,220,0.95)";
@@ -206,9 +210,9 @@ export class Renderer {
     const w = this.canvas.width;
     const h = this.canvas.height;
 
-    ctx.strokeStyle = COLORS.gridLine ?? "rgba(255, 255, 255, 0.08)";
+    ctx.strokeStyle = COLORS.gridLine ?? "rgba(255, 255, 255, 0.06)";
     ctx.lineWidth = 1;
-    ctx.shadowColor = COLORS.gridGlow ?? "rgba(0, 255, 255, 0.12)";
+    ctx.shadowColor = COLORS.gridGlow ?? "rgba(0, 255, 255, 0.10)";
     ctx.shadowBlur = Math.max(2, this.cellSize * 0.12);
 
     for (let c = 0; c < this.cols; c++) {
