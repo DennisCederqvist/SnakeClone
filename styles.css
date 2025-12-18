@@ -8,11 +8,11 @@ body {
   background: #111;
   color: #fff;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  margin-top: 100px;
 }
 
 h1,
 h2 {
-  text-align: center;
   color: cyan;
 }
 
@@ -20,11 +20,11 @@ h2 {
   display: grid;
   place-items: center;
   padding: 10px;
-  margin-bottom: 30px;
+  margin: 0 auto;
 }
 
 .game-ui {
-  width: min(92vw, 920px);
+  width: min(95vw, 95vh);
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
@@ -37,12 +37,13 @@ h2 {
 }
 
 .game-wrap {
-  width: min(92vw, 920px);
+  width: min(95vw, 95vh);
   position: relative;
   border: 6px solid #b076ff;
   border-radius: 8px;
   box-shadow: 0 0 20px rgb(255, 0, 0);
   overflow: hidden;
+  margin: 0 auto;
 }
 
 #gameCanvas {
@@ -80,7 +81,7 @@ h2 {
 }
 
 .overlay__title {
-  font-size: 3rem;
+  font-size: clamp(3rem, 8cqw, 9rem);
   margin-bottom: 1.5rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -143,7 +144,7 @@ h2 {
 }
 
 .overlay__input {
-  width: 100%;
+  width: 95%;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -160,6 +161,12 @@ h2 {
 .mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New",
     monospace;
+  width: 90%;
+}
+
+#hostLobbyButton {
+  width: 40%;
+  align-self: center;
 }
 
 .lobby-actions {
@@ -178,7 +185,7 @@ h2 {
 
 .ready-row {
   display: flex;
-  gap: 10px;
+  gap: 30px;
   justify-content: center;
   flex-wrap: wrap;
 }
@@ -223,3 +230,89 @@ h2 {
   flex-wrap: wrap;
   margin-top: 14px;
 }
+
+.powerupWrapper {
+  width: min(95vw, 95vh);
+  display: flex;
+  justify-content: flex-start;
+}
+
+.powerups {
+  align-items: flex-start;
+}
+
+
+/* Title Animation */
+.titleFliker {
+  -webkit-animation: text-flicker-in-glow 3s linear 0.5s both;
+  animation: text-flicker-in-glow 3s linear 0.5s both;
+}
+
+@-webkit-keyframes text-flicker-in-glow {
+  0% { opacity: 0; }
+  10% { opacity: 0; text-shadow: none; }
+  10.1% { opacity: 1; text-shadow: none; }
+  10.2% { opacity: 0; text-shadow: none; }
+  20% { opacity: 0; text-shadow: none; }
+  20.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.25); }
+  20.6% { opacity: 0; text-shadow: none; }
+  30% { opacity: 0; text-shadow: none; }
+  30.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.45), 0 0 60px rgba(255,255,255,0.25); }
+  30.6% { opacity: 0; text-shadow: none; }
+  45% { opacity: 0; text-shadow: none; }
+  45.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.45), 0 0 60px rgba(255,255,255,0.25); }
+  55.1% { opacity: 0; text-shadow: none; }
+  57.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.55), 0 0 60px rgba(255,255,255,0.35); }
+  60.1% { opacity: 0; text-shadow: none; }
+  65.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.55), 0 0 60px rgba(255,255,255,0.35), 0 0 100px rgba(255,255,255,0.1); }
+  75.1% { opacity: 0; text-shadow: none; }
+  77.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.55), 0 0 60px rgba(255,255,255,0.4), 0 0 110px rgba(255,255,255,0.2), 0 0 100px rgba(255,255,255,0.1); }
+  85.1% { opacity: 0; text-shadow: none; }
+  86.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.6), 0 0 60px rgba(255,255,255,0.45), 0 0 110px rgba(255,255,255,0.25), 0 0 100px rgba(255,255,255,0.1); }
+  100% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.6), 0 0 60px rgba(255,255,255,0.45), 0 0 110px rgba(255,255,255,0.25), 0 0 100px rgba(255,255,255,0.1); }
+}
+
+@keyframes text-flicker-in-glow {
+  0% { opacity: 0; }
+  10% { opacity: 0; text-shadow: none; }
+  10.1% { opacity: 1; text-shadow: none; }
+  10.2% { opacity: 0; text-shadow: none; }
+  20% { opacity: 0; text-shadow: none; }
+  20.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.25); }
+  20.6% { opacity: 0; text-shadow: none; }
+  30% { opacity: 0; text-shadow: none; }
+  30.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.45), 0 0 60px rgba(255,255,255,0.25); }
+  30.6% { opacity: 0; text-shadow: none; }
+  45% { opacity: 0; text-shadow: none; }
+  45.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.45), 0 0 60px rgba(255,255,255,0.25); }
+  55.1% { opacity: 0; text-shadow: none; }
+  57.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.55), 0 0 60px rgba(255,255,255,0.35); }
+  60.1% { opacity: 0; text-shadow: none; }
+  65.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.55), 0 0 60px rgba(255,255,255,0.35), 0 0 100px rgba(255,255,255,0.1); }
+  75.1% { opacity: 0; text-shadow: none; }
+  77.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.55), 0 0 60px rgba(255,255,255,0.4), 0 0 110px rgba(255,255,255,0.2), 0 0 100px rgba(255,255,255,0.1); }
+  85.1% { opacity: 0; text-shadow: none; }
+  86.1% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.6), 0 0 60px rgba(255,255,255,0.45), 0 0 110px rgba(255,255,255,0.25), 0 0 100px rgba(255,255,255,0.1); }
+  100% { opacity: 1; text-shadow: 0 0 30px rgba(255,255,255,0.6), 0 0 60px rgba(255,255,255,0.45), 0 0 110px rgba(255,255,255,0.25), 0 0 100px rgba(255,255,255,0.1); }
+}
+
+
+/* Button animations */
+
+#startButton:hover {
+  animation: vibrate-1 0.7s linear infinite;
+}
+
+#multiplayerButton:hover {
+  animation: vibrate-1 0.7s linear infinite;
+}
+
+@keyframes vibrate-1 {
+  0% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+  100% { transform: translate(0); }
+}
+
