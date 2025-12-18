@@ -161,9 +161,9 @@ export class MultiplayerGame {
       const spawn = spawns[i];
 
       const dirs = [
-        { x: 1, y: 0 },
-        { x: -1, y: 0 },
         { x: 0, y: 1 },
+        { x: -1, y: 0 },
+        { x: 1, y: 0 },
         { x: 0, y: -1 },
       ];
 
