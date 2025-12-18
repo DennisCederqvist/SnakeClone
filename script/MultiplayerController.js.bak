@@ -23,7 +23,6 @@ export class MultiplayerController {
     this.localName = "Player";
 
     this.game = null;
-    this._lastSentKey = null; // throttle repeated keydown spam
 
     if (this.ui) {
       this.ui.onMpHostRequest = (name) => this.hostLobby(name);
@@ -136,7 +135,7 @@ export class MultiplayerController {
     this.rebuildLobbyUi();
 
     // Be host om state
-    this.api.transmit({ type: "lobby_sync_request", sessionId: this.sessionId });
+    this.api.transmit({ type: "lobby_sync_request" });
 
     console.log("[MP] join ok, session:", this.sessionId);
   }
@@ -155,7 +154,7 @@ export class MultiplayerController {
     this.ui?.setReadyButtonState(this.localReady);
     this.rebuildLobbyUi();
 
-    this.api.transmit({ type: "ready", sessionId: this.sessionId, ready: this.localReady, name: this.localName });
+    this.api.transmit({ type: "ready", ready: this.localReady, name: this.localName });
 
     if (this.isHost) this.maybeStartCountdown();
   }
@@ -296,13 +295,13 @@ export class MultiplayerController {
 
     this.api.transmit({
       type: "lobby_state",
-      sessionId: this.sessionId,
       players: Array.from(this.players.entries()).map(([cid, p]) => ({
         clientId: cid,
         name: p.name,
         ready: !!p.ready,
         slot: p.slot,
       })),
+      sessionId: this.sessionId,
     });
   }
 
@@ -335,13 +334,13 @@ export class MultiplayerController {
 
     let seconds = 5;
     this.ui?.setCountdown(`Starting in ${seconds}…`);
-    this.api.transmit({ type: "countdown", sessionId: this.sessionId, seconds });
+    this.api.transmit({ type: "countdown", seconds });
 
     const t = setInterval(() => {
       seconds -= 1;
       if (seconds > 0) {
         this.ui?.setCountdown(`Starting in ${seconds}…`);
-        this.api.transmit({ type: "countdown", sessionId: this.sessionId, seconds });
+        this.api.transmit({ type: "countdown", seconds });
         return;
       }
       clearInterval(t);
@@ -351,8 +350,6 @@ export class MultiplayerController {
 
   startMultiplayerMatchHost() {
     if (!this.isHost || !this.isInMultiplayerSession()) return;
-
-    this._lastSentKey = null;
 
     this.singleGame.isRunning = false;
     this.singleGame.setRenderEnabled(false);
@@ -369,9 +366,9 @@ export class MultiplayerController {
       scoreElement: this.scoreElement,
       players: this.players,
       hostClientId: this.clientId,
-      onBroadcastState: (state) => this.api.transmit({ type: "state", sessionId: this.sessionId, state }),
+      onBroadcastState: (state) => this.api.transmit({ type: "state", state }),
       onEnd: (result) => {
-        this.api.transmit({ type: "end", sessionId: this.sessionId, ...result });
+        this.api.transmit({ type: "end", ...result });
         this.handleMatchEnd({ type: "end", ...result });
       },
     });
@@ -390,8 +387,6 @@ export class MultiplayerController {
   }
 
   startMultiplayerMatchClient(data) {
-    this._lastSentKey = null;
-
     this.singleGame.isRunning = false;
     this.singleGame.setRenderEnabled(false);
 
@@ -423,7 +418,6 @@ export class MultiplayerController {
   stopMultiplayerMatch() {
     this.game?.stop();
     this.game = null;
-    this._lastSentKey = null; // throttle repeated keydown spam
 
     this.singleGame.setRenderEnabled(true);
   }
@@ -446,17 +440,13 @@ export class MultiplayerController {
   handleKeyDown(key) {
     if (!this.isInMultiplayerSession()) return;
 
-    // Stoppa browser key-repeat från att spamma nätet (håller bandbredden låg)
-    if (this._lastSentKey === key) return;
-    this._lastSentKey = key;
-
     // Om host och matchen kör: applicera direkt (minskar lagg/jitter)
     if (this.isHost && this.game?.isRunning) {
       this.game.applyRemoteInput(this.clientId, key);
       return;
     }
 
-    // Clients: skicka till host via server (alltid med sessionId)
-    this.api.transmit({ type: "input", sessionId: this.sessionId, key });
+    // Clients: skicka till host via server
+    this.api.transmit({ type: "input", key });
   }
 }
