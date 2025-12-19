@@ -41,6 +41,10 @@ export class mpapi {
 			for (let i = 0; i < pending.length; i += 1) {
 				this.socket.send(pending[i]);
 			}
+
+				this.socket.addEventListener("close", (event) => {
+				console.log("WS close:", event.code, event.reason || "(no reason)");
+			});
 		});
 
 		console.log('Setting up WebSocket event listeners');

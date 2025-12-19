@@ -245,7 +245,7 @@ h2 {
 /* Title Animation */
 .titleFliker {
   -webkit-animation: text-flicker-in-glow 3s linear 0.5s both;
-  animation: text-flicker-in-glow 3s linear 0.5s both;
+  animation: text-flicker-in-glow 3s linear both;
 }
 
 @-webkit-keyframes text-flicker-in-glow {
@@ -299,20 +299,52 @@ h2 {
 
 /* Button animations */
 
-#startButton:hover {
-  animation: vibrate-1 0.7s linear infinite;
+/* --- Intro + Vibrate (vibrate är pausad tills hover) --- */
+#startButton,
+#multiplayerButton {
+  opacity: 0;
+  filter: blur(8px);
+  transition: none;
+
+  /* 1) intro  2) vibrate */
+  animation-name: btnFadeIn, vibrate-1;
+  animation-duration: 5s, 0.5s;
+  animation-timing-function: cubic-bezier(.2,.8,.2,1), linear;
+  animation-fill-mode: forwards, none;
+  animation-iteration-count: 1, infinite;
+
+  /* Viktigt: vibrate startar pausad */
+  animation-play-state: running, paused;
 }
 
+/* delays för intro (vibrate-delay = 0) */
+#startButton {
+  animation-delay: 4s, 0s;
+}
+#multiplayerButton {
+  animation-delay: 5s, 0s;
+}
+
+/* När du hovrar: “starta” vibrate genom att unpausa den andra animationen */
+#startButton:hover,
 #multiplayerButton:hover {
-  animation: vibrate-1 0.7s linear infinite;
+  animation-play-state: running, running;
 }
 
+/* Intro keyframes */
+@keyframes btnFadeIn {
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+/* Vibrate keyframes (använder translate3d för lite bättre rendering) */
 @keyframes vibrate-1 {
-  0% { transform: translate(0); }
-  20% { transform: translate(-2px, 2px); }
-  40% { transform: translate(-2px, -2px); }
-  60% { transform: translate(2px, 2px); }
-  80% { transform: translate(2px, -2px); }
-  100% { transform: translate(0); }
+  0%   { transform: translate3d(0, 0, 0); }
+  20%  { transform: translate3d(-2px, 2px, 0); }
+  40%  { transform: translate3d(-2px, -2px, 0); }
+  60%  { transform: translate3d(2px, 2px, 0); }
+  80%  { transform: translate3d(2px, -2px, 0); }
+  100% { transform: translate3d(0, 0, 0); }
 }
-
