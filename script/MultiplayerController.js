@@ -18,17 +18,17 @@ export class MultiplayerController {
     this.clientId = null;
     this.isHost = false;
 
-    this.players = new Map(); // clientId -> { name, ready, slot }
+    this.players = new Map();
     this.localReady = false;
     this.localName = "Player";
 
     this.game = null;
-
     this._countdownInterval = null;
 
-    // ✅ NEW: client-side state coalescing (kills “sticky lag”)
-    this._pendingState = null;   // latest received state
-    this._stateRafId = 0;        // requestAnimationFrame id (0 = none)
+    // ✅ Coalesce latest state + keep receive timestamp
+    this._pendingState = null;
+    this._pendingStateRecvAt = 0;
+    this._stateRafId = 0;
 
     if (this.ui) {
       this.ui.onMpHostRequest = (name) => this.hostLobby(name);
@@ -36,11 +36,8 @@ export class MultiplayerController {
       this.ui.onMpReadyToggle = () => this.toggleReady();
       this.ui.onMpLeave = () => this.leaveLobby();
     }
-
-    console.log("[MP] controller ready");
   }
 
-  // ✅ NEW
   _scheduleApplyLatestState() {
     if (this._stateRafId) return;
 
@@ -48,10 +45,13 @@ export class MultiplayerController {
       this._stateRafId = 0;
 
       const state = this._pendingState;
+      const recvAt = this._pendingStateRecvAt;
+
       this._pendingState = null;
+      this._pendingStateRecvAt = 0;
 
       if (state && !this.isHost) {
-        this.game?.applyRemoteState(state);
+        this.game?.applyRemoteState(state, recvAt);
       }
     });
   }
@@ -71,11 +71,7 @@ export class MultiplayerController {
       else if (cmd === "closed") this.onClosed();
       else if (cmd === "game") this.onGameMessage(clientId, data);
     });
-
-    console.log("[MP] api created");
   }
-
-  // ================= COUNTDOWN =================
 
   clearCountdown() {
     if (this._countdownInterval) {
@@ -83,8 +79,6 @@ export class MultiplayerController {
       this._countdownInterval = null;
     }
   }
-
-  // ================= LOBBY =================
 
   async hostLobby(name) {
     this.ensureApi();
@@ -96,8 +90,6 @@ export class MultiplayerController {
     this.localReady = false;
     this.localName = (name || "Player").trim() || "Player";
 
-    console.log("[MP] hosting as", this.localName);
-
     let res;
     try {
       res = await this.api.host({ name: this.localName, private: true });
@@ -106,10 +98,7 @@ export class MultiplayerController {
       return;
     }
 
-    if (!res?.session || !res?.clientId) {
-      console.error("[MP] host response invalid", res);
-      return;
-    }
+    if (!res?.session || !res?.clientId) return;
 
     this.sessionId = res.session;
     this.clientId = res.clientId;
@@ -126,8 +115,6 @@ export class MultiplayerController {
 
     this.assignSlotsHostSide();
     this.broadcastLobbyState();
-
-    console.log("[MP] host ok, session:", this.sessionId);
   }
 
   async joinLobby(code, name) {
@@ -143,8 +130,6 @@ export class MultiplayerController {
     this.localReady = false;
     this.localName = (name || "Player").trim() || "Player";
 
-    console.log("[MP] joining", session, "as", this.localName);
-
     let res;
     try {
       res = await this.api.join(session, { name: this.localName });
@@ -153,10 +138,7 @@ export class MultiplayerController {
       return;
     }
 
-    if (!res?.session || !res?.clientId) {
-      console.error("[MP] join response invalid", res);
-      return;
-    }
+    if (!res?.session || !res?.clientId) return;
 
     this.sessionId = res.session;
     this.clientId = res.clientId;
@@ -174,8 +156,6 @@ export class MultiplayerController {
     this.rebuildLobbyUi();
 
     this.api.transmit({ type: "lobby_sync_request", sessionId: this.sessionId });
-
-    console.log("[MP] join ok, session:", this.sessionId);
   }
 
   toggleReady() {
@@ -208,7 +188,6 @@ export class MultiplayerController {
     this.clearCountdown();
 
     if (this.api) this.api.leave();
-
     this.stopMultiplayerMatch();
 
     this.api = null;
@@ -218,8 +197,9 @@ export class MultiplayerController {
     this.players.clear();
     this.localReady = false;
 
-    // ✅ also clear any pending state / raf
+    // clear pending state
     this._pendingState = null;
+    this._pendingStateRecvAt = 0;
     if (this._stateRafId) cancelAnimationFrame(this._stateRafId);
     this._stateRafId = 0;
 
@@ -227,8 +207,6 @@ export class MultiplayerController {
     this.ui?.setCountdown("");
     this.ui?.hideLobby();
     this.ui?.showStartScreen();
-
-    console.log("[MP] left lobby");
   }
 
   onJoined(clientId) {
@@ -263,7 +241,6 @@ export class MultiplayerController {
   }
 
   onClosed() {
-    console.log("[MP] session closed by server");
     this.leaveLobby();
   }
 
@@ -292,7 +269,6 @@ export class MultiplayerController {
         }
         this.rebuildLobbyUi();
         this.broadcastLobbyState();
-
         this.clearCountdown();
         this.maybeStartCountdown();
         break;
@@ -314,9 +290,9 @@ export class MultiplayerController {
 
       case "state":
         if (this.isHost) return;
-
-        // ✅ BIG FIX: don’t apply every state; keep only the latest and apply once per frame
+        // ✅ store latest + receive time
         this._pendingState = data.state;
+        this._pendingStateRecvAt = performance.now();
         this._scheduleApplyLatestState();
         break;
 
@@ -476,8 +452,9 @@ export class MultiplayerController {
       });
     }
 
-    // ✅ clear any pending state (fresh start)
+    // clear pending
     this._pendingState = null;
+    this._pendingStateRecvAt = 0;
     if (this._stateRafId) cancelAnimationFrame(this._stateRafId);
     this._stateRafId = 0;
 
@@ -505,8 +482,8 @@ export class MultiplayerController {
 
     this.singleGame.setRenderEnabled(true);
 
-    // ✅ stop pending state apply
     this._pendingState = null;
+    this._pendingStateRecvAt = 0;
     if (this._stateRafId) cancelAnimationFrame(this._stateRafId);
     this._stateRafId = 0;
   }
@@ -525,7 +502,6 @@ export class MultiplayerController {
     this.rebuildLobbyUi();
   }
 
-  // ================= INPUT =================
   handleKeyDown(keyOrEvent) {
     if (!this.isInMultiplayerSession()) return;
 
