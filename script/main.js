@@ -35,3 +35,26 @@ window.addEventListener("load", () => {
     }
   });
 });
+
+const bgm = document.getElementById("bgm");
+const soundBtn = document.getElementById("soundToggle");
+
+let soundEnabled = false;
+
+soundBtn.addEventListener("click", async () => {
+  try {
+    if (!soundEnabled) {
+      bgm.volume = 0.25;
+      bgm.muted = false;
+      await bgm.play();   // unlocks + starts
+      soundBtn.textContent = "🔊";
+      soundEnabled = true;
+    } else {
+      bgm.muted = true;   // keep playing silently
+      soundBtn.textContent = "🔇";
+      soundEnabled = false;
+    }
+  } catch (e) {
+    console.error("Sound toggle failed:", e);
+  }
+});
