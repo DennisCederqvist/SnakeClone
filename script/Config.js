@@ -16,8 +16,8 @@ export const EFFECT = {
   SPEED_MULT: 1.5,
   SPEED_MS: 3000,
 
-  // Singleplayer: SLOW påverkar dig (tills multiplayer finns)
-  SLOW_MULT: 0.7,
+  // Singleplayer: SLOW påverkar dig, i multiplayer ska den påverka alla utom den som plockar upp den.
+  SLOW_MULT: 0,
   SLOW_MS: 3500,
 
   // Ghost: ignorerar self-collision (väggen är fortfarande dödlig)
