@@ -1,9 +1,11 @@
 // MultiplayerController.js
 // Host-authoritative multiplayer + smooth rendering for joiners.
-// Key change in this drop-in:
-// ✅ Separate render delay for SELF vs OTHERS.
-//    - Self: near-zero delay => much less input lag.
-//    - Others + world: delayed => smooth (anti-jitter).
+//
+// ✅ Key fix in this drop-in:
+// - Others/world render "behind" using delay => smooth.
+// - Self render with low delay to reduce input lag,
+//   BUT when self targetTick goes past the latest snapshot we EXTRAPOLATE a tiny bit
+//   (max ~0.9 tick) so self doesn't "freeze then jump".
 //
 // Keeps:
 // - Lobby overlay visible during countdown; hides when match starts.
@@ -26,10 +28,12 @@ const MAX_PLAYERS = 4;
 const TICK_MS = 100; // 10 ticks/s
 
 // Render smoothing (joiners)
-const OTHERS_RENDER_DELAY_MS = 160; // keep smooth
-const SELF_RENDER_DELAY_MS = 0;     // ✅ minimize input lag for own snake
+const OTHERS_RENDER_DELAY_MS = 160; // smooth remote jitter
+const SELF_RENDER_DELAY_MS = 50;     // reduce perceived input lag
 
-// Match rules
+// ✅ how far we allow self extrapolation past newest snapshot (in ticks)
+const SELF_MAX_EXTRAP_TICKS = 0.9;
+
 const MATCH_DURATION_MS = 180_000; // 3 min
 const RESPAWN_DELAY_MS = 3_000;
 const COUNTDOWN_MS = 3_000;
@@ -121,11 +125,10 @@ export class MultiplayerController {
     // Each: { tick, receivedAt, snapshot }
     this._snapBuf = [];
 
-    // Stable tick clock anchor for interpolation
+    // Anchor for estimating host tick now (client-side)
     this._lastSnapTick = 0;
     this._lastSnapAt = 0;
 
-    // Render delay in ticks
     this._othersDelayTicks = Math.max(1, Math.round(OTHERS_RENDER_DELAY_MS / TICK_MS));
     this._selfDelayTicks = Math.max(0, Math.round(SELF_RENDER_DELAY_MS / TICK_MS));
 
@@ -139,9 +142,6 @@ export class MultiplayerController {
     this._attachNetworkListener();
   }
 
-  // --------------------
-  // UI hooks
-  // --------------------
   _attachUiCallbacks() {
     this.ui.onMpHostRequest = async (name) => this.hostLobby(name);
     this.ui.onMpJoinRequest = async (code, name) => this.joinLobby(code, name);
@@ -179,9 +179,6 @@ export class MultiplayerController {
     );
   }
 
-  // --------------------
-  // Network listener
-  // --------------------
   _attachNetworkListener() {
     if (this.unlisten) this.unlisten();
     this.unlisten = this.api.listen((cmd, _messageId, clientId, data) => {
@@ -194,9 +191,6 @@ export class MultiplayerController {
     });
   }
 
-  // --------------------
-  // Public API used by main.js
-  // --------------------
   isMultiplayerActive() {
     return this.isActive;
   }
@@ -205,11 +199,9 @@ export class MultiplayerController {
     const dir = keyToDir(key);
     if (!dir) return;
 
-    // Local desired direction (host uses it for sim; joiners keep it for responsiveness feel)
     const rt = this.runtime.get(this.selfId);
     if (rt) rt.desiredDir = dir;
 
-    // Send to host
     this.api.transmit({ type: "input", tick: this.tick, dir });
   }
 
@@ -285,7 +277,6 @@ export class MultiplayerController {
             isHost: id === payload.host,
           });
         }
-        // Create runtime entries so self has desiredDir buffer, etc.
         this._ensureRuntimeFor(id);
       }
 
@@ -453,7 +444,7 @@ export class MultiplayerController {
         this.ui.hideLobby();
         this.ui.setCountdown("");
 
-        // Reset client smoothing anchors
+        // Reset smoothing anchors
         this._snapBuf = [];
         this._lastSnapTick = 0;
         this._lastSnapAt = 0;
@@ -680,6 +671,7 @@ export class MultiplayerController {
   }
 
   _hostTick() {
+    // unchanged from your host-authoritative sim...
     if (this.matchState === "countdown") {
       const elapsed = this.tick - (this.countdownStartTick ?? this.tick);
       const remaining = Math.max(0, COUNTDOWN_TICKS - elapsed);
@@ -749,7 +741,9 @@ export class MultiplayerController {
     this.api.transmit({ type: "snapshot", snapshot: snap });
   }
 
+  // ====== Host sim (same as before) ======
   _simulateHostOneTick() {
+    // Respawns
     for (const id of this.rosterIds) {
       const rt = this.runtime.get(id);
       if (!rt) continue;
@@ -758,12 +752,14 @@ export class MultiplayerController {
       }
     }
 
+    // Apply direction
     for (const id of this.rosterIds) {
       const rt = this.runtime.get(id);
       if (!rt || !rt.alive) continue;
       rt.snake.setDirection(rt.desiredDir.x, rt.desiredDir.y);
     }
 
+    // Steps per tick (speed accumulator)
     const stepsToDo = new Map();
     let maxSteps = 0;
 
@@ -808,12 +804,14 @@ export class MultiplayerController {
 
     const toDie = new Set();
 
+    // Wall collision
     for (const [id, nh] of nextHeads.entries()) {
       if (nh.x < 0 || nh.x >= this.cols || nh.y < 0 || nh.y >= this.rows) {
         toDie.add(id);
       }
     }
 
+    // Head-on collision
     const cellMap = new Map();
     for (const [id, nh] of nextHeads.entries()) {
       if (toDie.has(id)) continue;
@@ -842,6 +840,7 @@ export class MultiplayerController {
       }
     }
 
+    // Body collision
     const occupied = new Set();
     const tailVacates = new Set();
 
@@ -883,6 +882,7 @@ export class MultiplayerController {
 
     const head = rt.snake.segments[0];
 
+    // Powerups
     const pidx = this.powerUps.findIndex((p) => p.x === head.x && p.y === head.y);
     if (pidx !== -1) {
       const picked = this.powerUps.splice(pidx, 1)[0];
@@ -917,6 +917,7 @@ export class MultiplayerController {
       while (this.powerUps.length < POWERUP_COUNT) this._spawnPowerUpHost();
     }
 
+    // Food
     const fidx = this.foods.findIndex((f) => f.x === head.x && f.y === head.y);
     if (fidx !== -1) {
       this.foods.splice(fidx, 1);
@@ -1071,7 +1072,7 @@ export class MultiplayerController {
   }
 
   // --------------------
-  // Snapshot buffer helpers (clients)
+  // Snapshot buffer helpers
   // --------------------
   _pushSnapshot(entry) {
     this._snapBuf.push(entry);
@@ -1086,32 +1087,6 @@ export class MultiplayerController {
     while (this._snapBuf.length > 20) this._snapBuf.shift();
   }
 
-  _pickSnapshotsForRender(now, delayTicks) {
-    if (this._snapBuf.length === 0) return null;
-    if (this._snapBuf.length === 1) return { a: this._snapBuf[0], b: this._snapBuf[0], t: 1 };
-
-    const last = this._snapBuf[this._snapBuf.length - 1];
-    const anchorTick = this._lastSnapTick || last.tick;
-    const anchorAt = this._lastSnapAt || last.receivedAt;
-
-    const dtMs = Math.max(0, now - anchorAt);
-    const hostTickNowEst = anchorTick + dtMs / TICK_MS;
-
-    const targetTick = hostTickNowEst - delayTicks;
-
-    let bIndex = this._snapBuf.findIndex((s) => s.tick >= targetTick);
-    if (bIndex === -1) bIndex = this._snapBuf.length - 1;
-    if (bIndex === 0) bIndex = 1;
-
-    const a = this._snapBuf[bIndex - 1];
-    const b = this._snapBuf[bIndex];
-
-    const span = Math.max(1, b.tick - a.tick);
-    const t = Math.max(0, Math.min(1, (targetTick - a.tick) / span));
-
-    return { a, b, t };
-  }
-
   _estimateHostTick(now) {
     if (this.isHost) return this.tick;
 
@@ -1124,10 +1099,59 @@ export class MultiplayerController {
     return anchorTick + dtMs / TICK_MS;
   }
 
+  // ✅ allowExtrap: if targetTick > newestSnapshot.tick, allow t > 1 up to maxExtrapTicks
+  _pickSnapshotsForRender(now, delayTicks, allowExtrap, maxExtrapTicks) {
+    if (this._snapBuf.length === 0) return null;
+    if (this._snapBuf.length === 1) return { a: this._snapBuf[0], b: this._snapBuf[0], t: 1 };
+
+    const last = this._snapBuf[this._snapBuf.length - 1];
+    const anchorTick = this._lastSnapTick || last.tick;
+    const anchorAt = this._lastSnapAt || last.receivedAt;
+
+    const dtMs = Math.max(0, now - anchorAt);
+    const hostTickNowEst = anchorTick + dtMs / TICK_MS;
+    let targetTick = hostTickNowEst - delayTicks;
+
+    // Find b = first snapshot with tick >= targetTick
+    let bIndex = this._snapBuf.findIndex((s) => s.tick >= targetTick);
+
+    // If we're beyond newest snapshot:
+    if (bIndex === -1) {
+      if (!allowExtrap) {
+        // clamp to newest => causes "freeze then jump" (what you saw)
+        bIndex = this._snapBuf.length - 1;
+        const a = this._snapBuf[Math.max(0, bIndex - 1)];
+        return { a, b: this._snapBuf[bIndex], t: 1 };
+      }
+
+      // Extrapolate using the last two snapshots
+      const b = this._snapBuf[this._snapBuf.length - 1];
+      const a = this._snapBuf[this._snapBuf.length - 2];
+
+      const span = Math.max(1, b.tick - a.tick);
+
+      const extra = Math.min(maxExtrapTicks, Math.max(0, targetTick - b.tick));
+      const t = 1 + extra / span; // t in [1, 1+...]
+
+      return { a, b, t };
+    }
+
+    if (bIndex === 0) bIndex = 1;
+
+    const a = this._snapBuf[bIndex - 1];
+    const b = this._snapBuf[bIndex];
+
+    const span = Math.max(1, b.tick - a.tick);
+    const t = Math.max(0, Math.min(1, (targetTick - a.tick) / span));
+
+    return { a, b, t };
+  }
+
   // --------------------
   // Render
   // --------------------
   _render(now) {
+    // Countdown text
     if (this.matchState === "countdown" && this.countdownStartTick != null) {
       const hostTickEstimate = this._estimateHostTick(now);
       const elapsed = hostTickEstimate - this.countdownStartTick;
@@ -1148,10 +1172,21 @@ export class MultiplayerController {
     }
 
     // CLIENT:
-    // - World + others: delayed (smooth)
-    // - Self: near-zero delay (less input lag)
-    const pickedOthers = this._pickSnapshotsForRender(now, this._othersDelayTicks);
-    const pickedSelf = this._pickSnapshotsForRender(now, this._selfDelayTicks);
+    // - World + others: delayed for smoothness
+    // - Self: low delay + slight extrapolation for smoothness (no freeze/jump)
+    const pickedOthers = this._pickSnapshotsForRender(
+      now,
+      this._othersDelayTicks,
+      false,
+      0
+    );
+
+    const pickedSelf = this._pickSnapshotsForRender(
+      now,
+      this._selfDelayTicks,
+      true,
+      SELF_MAX_EXTRAP_TICKS
+    );
 
     if (!pickedOthers || !pickedSelf) return;
 
@@ -1160,7 +1195,7 @@ export class MultiplayerController {
 
     const snakes = [];
 
-    // Self snake: render from near-latest snapshots
+    // --- Self ---
     {
       const prevSnap = pickedSelf.a.snapshot;
       const nextSnap = pickedSelf.b.snapshot;
@@ -1191,7 +1226,7 @@ export class MultiplayerController {
       }
     }
 
-    // Other snakes: render delayed & smooth
+    // --- Others ---
     {
       const prevSnap = pickedOthers.a.snapshot;
       const nextSnap = pickedOthers.b.snapshot;
@@ -1267,9 +1302,6 @@ export class MultiplayerController {
     this.ui.showWinnerBoard({ winnerName, scores });
   }
 
-  // --------------------
-  // Reset
-  // --------------------
   _resetAllState() {
     this.isActive = false;
     this.isHost = false;
@@ -1336,6 +1368,7 @@ function dedupe(arr) {
   return out;
 }
 
+// NOTE: We allow t > 1 for self extrapolation (on purpose).
 function interpolateSegments(prevSegs, nextSegs, t) {
   const maxLen = Math.max(prevSegs.length, nextSegs.length);
   const out = [];
