@@ -28,6 +28,28 @@ export const EFFECT = {
   MIN_SNAKE_LEN: 2,
 };
 
+// === Singleplayer specials ===
+export const SPECIAL = {
+  // BONUS: dyker upp ibland, finns 5s, ger +100 poäng om du tar den.
+  BONUS_SCORE: 100,
+  BONUS_LIFETIME_MS: 3000,
+  BONUS_SPAWN_MIN_MS: 6000,
+  BONUS_SPAWN_MAX_MS: 14000,
+
+  // MIRROR: spawnar 3 rutor framför ormen, finns 3s, om du tar den -> invert 3s
+  MIRROR_LIFETIME_MS: 3000,
+  MIRROR_EFFECT_MS: 3000,
+  MIRROR_SPAWN_MIN_MS: 9000,
+  MIRROR_SPAWN_MAX_MS: 18000,
+
+  // HAZARDS/holes: dyker upp ibland, finns 5s, dödar vid kollision.
+  HAZARD_LIFETIME_MS: 10000,
+  HAZARD_SPAWN_MIN_MS: 7000,
+  HAZARD_SPAWN_MAX_MS: 16000,
+  HAZARD_COUNT_MIN: 2,
+  HAZARD_COUNT_MAX: 5,
+};
+
 export const COLORS = {
   background: "#111",
   borderStroke: "#444",

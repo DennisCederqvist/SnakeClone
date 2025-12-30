@@ -1,4 +1,4 @@
-// Renderer.js – Tron-style + grid + mat + powerups
+// Renderer.js – Tron-style + grid + mat + powerups + specials + hazards
 import { COLORS } from "./Config.js";
 import { PowerUpType } from "./PowerUps.js";
 
@@ -27,10 +27,22 @@ export class Renderer {
     ctx.lineWidth = 2;
     ctx.strokeRect(0, 0, this.cols * this.cellSize, this.rows * this.cellSize);
 
+    // Hazards (holes)
+    if (state.hazards?.length) {
+      for (const h of state.hazards) this.drawHazard(h);
+    }
+
+    // Specials (bonus/mirror)
+    if (state.specials?.length) {
+      for (const s of state.specials) this.drawSpecial(s);
+    }
+
+    // Regular powerups
     if (state.powerUps?.length) {
       for (const p of state.powerUps) this.drawPowerUp(p);
     }
 
+    // Food
     if (state.foods?.length) {
       for (const food of state.foods) {
         const fx = (food.x + 0.5) * this.cellSize;
@@ -58,6 +70,7 @@ export class Renderer {
       }
     }
 
+    // Snakes
     if (state.snakes?.length) {
       for (const snake of state.snakes) {
         const segments = snake.segments;
@@ -85,7 +98,6 @@ export class Renderer {
         ctx.lineJoin = "miter";
         ctx.miterLimit = 2;
 
-        // ORIGINAL thickness
         ctx.strokeStyle = "rgba(0, 255, 255, 0.22)";
         ctx.lineWidth = Math.max(2, this.cellSize * 0.34);
         ctx.shadowColor = glow;
@@ -145,6 +157,84 @@ export class Renderer {
     }
   }
 
+  drawHazard(h) {
+    const ctx = this.ctx;
+    const x = (h.x + 0.5) * this.cellSize;
+    const y = (h.y + 0.5) * this.cellSize;
+
+    const rOuter = Math.max(6, this.cellSize * 0.30);
+    const rInner = Math.max(3, this.cellSize * 0.16);
+
+    ctx.save();
+
+    // Outer glow ring
+    ctx.beginPath();
+    ctx.arc(x, y, rOuter, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255, 60, 60, 0.10)";
+    ctx.shadowColor = "rgba(255, 60, 60, 0.65)";
+    ctx.shadowBlur = Math.max(6, this.cellSize * 0.55);
+    ctx.fill();
+
+    // Dark core "hole"
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.arc(x, y, rInner, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.75)";
+    ctx.fill();
+
+    // Small highlight
+    ctx.beginPath();
+    ctx.arc(x - rInner * 0.25, y - rInner * 0.25, Math.max(2, rInner * 0.25), 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.06)";
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  drawSpecial(s) {
+    // Bonus & Mirror ritas som “diamant”-rutor men med egen färg
+    const ctx = this.ctx;
+    const px = (s.x + 0.5) * this.cellSize;
+    const py = (s.y + 0.5) * this.cellSize;
+
+    let glow = "rgba(0,255,0,0.85)";
+    let fill = "rgba(0,255,0,0.18)";
+    let core = "rgba(220,255,220,0.95)";
+
+    if (s.type === PowerUpType.BONUS || s.type === "bonus") {
+      glow = "rgba(0, 255, 120, 0.85)";
+      fill = "rgba(0, 255, 120, 0.16)";
+      core = "rgba(220, 255, 235, 0.95)";
+    } else if (s.type === PowerUpType.MIRROR || s.type === "mirror") {
+      glow = "rgba(255, 0, 255, 0.90)";
+      fill = "rgba(255, 0, 255, 0.16)";
+      core = "rgba(255, 225, 255, 0.98)";
+    }
+
+    let r = Math.max(5, this.cellSize * 0.22);
+
+    if (s.type === PowerUpType.BONUS || s.type === "bonus") {
+      r = Math.max(7, this.cellSize * 0.30);   // större bonus
+    } else if (s.type === PowerUpType.MIRROR || s.type === "mirror") {
+      r = Math.max(6, this.cellSize * 0.22);   // normal mirror (eller justera)
+    }
+
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(Math.PI / 4);
+
+    ctx.fillStyle = fill;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = Math.max(6, this.cellSize * 0.6);
+    ctx.fillRect(-r, -r, r * 2, r * 2);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = core;
+    ctx.fillRect(-r * 0.45, -r * 0.45, r * 0.9, r * 0.9);
+
+    ctx.restore();
+  }
+
   drawPowerUp(p) {
     const ctx = this.ctx;
 
@@ -168,9 +258,9 @@ export class Renderer {
       fill = "rgba(180, 90, 255, 0.18)";
       core = "rgba(240, 220, 255, 0.95)";
     } else if (p.type === PowerUpType.SHRINK) {
-      glow = "rgba(255, 90, 90, 0.85)";
-      fill = "rgba(255, 90, 90, 0.18)";
-      core = "rgba(255, 220, 220, 0.95)";
+      glow = "rgba(255, 0, 0, 0.85)";
+      fill = "rgba(175, 90, 255, 0.36)";
+      core = "rgba(95, 169, 253, 0.95)";
     }
 
     const r = Math.max(5, this.cellSize * 0.22);

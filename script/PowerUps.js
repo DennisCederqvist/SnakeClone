@@ -5,6 +5,11 @@ export const PowerUpType = {
   SLOW: "slow",
   GHOST: "ghost",
   SHRINK: "shrink",
+
+  // OBS: används inte i random-spawn (singleplayer specials hanteras i Game),
+  // men finns här så Renderer kan färga dem om du senare vill flytta in dem i powerup-systemet.
+  BONUS: "bonus",
+  MIRROR: "mirror",
 };
 
 export class PowerUpManager {

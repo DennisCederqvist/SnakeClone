@@ -1339,13 +1339,31 @@ export class MultiplayerController {
 // --------------------
 function keyToDir(key) {
   switch (key) {
-    case "ArrowUp": return { x: 0, y: -1 };
-    case "ArrowDown": return { x: 0, y: 1 };
-    case "ArrowLeft": return { x: -1, y: 0 };
-    case "ArrowRight": return { x: 1, y: 0 };
-    default: return null;
+    case "ArrowUp":
+    case "w":
+    case "W":
+      return { x: 0, y: -1 };
+
+    case "ArrowDown":
+    case "s":
+    case "S":
+      return { x: 0, y: 1 };
+
+    case "ArrowLeft":
+    case "a":
+    case "A":
+      return { x: -1, y: 0 };
+
+    case "ArrowRight":
+    case "d":
+    case "D":
+      return { x: 1, y: 0 };
+
+    default:
+      return null;
   }
 }
+
 
 function isCardinal(dir) {
   return (
