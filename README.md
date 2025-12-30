@@ -66,6 +66,7 @@ The game features a polished singleplayer experience and an experimental multipl
 - Multiplayer mode is experimental and may behave inconsistently
 - No anti-cheat or score validation (by design for this project)
 - Mobile support is none existent
+- Sound issues, as the background music has to be toggled on/off (no Autoplay)
 
 ---
 
