@@ -365,3 +365,8 @@ h2 {
   margin: 0 auto;
   margin-top: 30px;
 }
+
+.history a {
+  color: cyan;
+  font-style: italic;
+}

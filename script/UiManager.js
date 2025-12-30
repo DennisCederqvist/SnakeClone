@@ -155,7 +155,6 @@ export class UiManager {
 					.join("")
 			: `<li style="opacity:.7">No scores yet</li>`;
 
-		// Scrolla in highlight om det finns
 		if (this._highlightId) {
 			const el = this.highscoreList.querySelector(".hs-me");
 			el?.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -234,9 +233,9 @@ export class UiManager {
   <div class="arcade-sub">Score: <span class="arcade-score">${Number(score)}</span></div>
   <div class="arcade-hint">ENTER INITIALS</div>
   <div class="arcade-inputs">
-    <input class="arcade-char" inputmode="latin" maxlength="1" autocomplete="off" />
-    <input class="arcade-char" inputmode="latin" maxlength="1" autocomplete="off" />
-    <input class="arcade-char" inputmode="latin" maxlength="1" autocomplete="off" />
+    <input class="arcade-char" inputmode="latin" maxlength="1" autocomplete="off" placeholder="A" />
+    <input class="arcade-char" inputmode="latin" maxlength="1" autocomplete="off" placeholder="A" />
+    <input class="arcade-char" inputmode="latin" maxlength="1" autocomplete="off" placeholder="A" />
   </div>
   <div class="arcade-help">A–Z / 0–9 • Enter to confirm</div>
 </div>`;
@@ -254,14 +253,24 @@ export class UiManager {
 			};
 
 			inputs.forEach((inp, idx) => {
+				// QoL: när man fokuserar en ruta, markera allt (om något finns)
+				inp.addEventListener("focus", () => inp.select());
+
 				inp.addEventListener("input", () => {
 					inp.value = sanitizeChar(inp.value).slice(0, 1);
-					if (inp.value && idx < inputs.length - 1) inputs[idx + 1].focus();
+
+					// Auto-advance + select nästa så man bara kan skriva direkt
+					if (inp.value && idx < inputs.length - 1) {
+						inputs[idx + 1].focus();
+						inputs[idx + 1].select();
+					}
 				});
 
 				inp.addEventListener("keydown", (e) => {
 					if (e.key === "Backspace" && !inp.value && idx > 0) {
+						e.preventDefault();
 						inputs[idx - 1].focus();
+						inputs[idx - 1].select();
 						return;
 					}
 					if (e.key === "Enter") {
@@ -271,10 +280,10 @@ export class UiManager {
 				});
 			});
 
-			// Default AAA
-			inputs[0].value = "A";
-			inputs[1].value = "A";
-			inputs[2].value = "A";
+			// Starta på första rutan, tom value (placeholder visar A)
+			inputs[0].value = "";
+			inputs[1].value = "";
+			inputs[2].value = "";
 			inputs[0].focus();
 			inputs[0].select();
 		});
@@ -310,6 +319,9 @@ export class UiManager {
   background:rgba(0,255,255,0.06);
   border:1px solid rgba(0,255,255,0.25);
   outline:none;
+}
+.arcade-char::placeholder{
+  color:rgba(220,255,255,0.35);
 }
 .arcade-char:focus{
   border-color:rgba(255,255,255,0.45);

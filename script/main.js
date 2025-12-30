@@ -15,7 +15,7 @@ function isTypingTarget(el) {
 
 // === AUDIO (BGM toggle + SFX always-on) ===
 function setupAudio() {
-	const SOUND_KEY = "trake_sound_enabled"; // bara för BGM
+	const SOUND_KEY = "trake_sound_enabled"; // BGM only
 	const bgm = document.getElementById("bgm");
 	const soundBtn = document.getElementById("soundToggle");
 
@@ -26,20 +26,19 @@ function setupAudio() {
 		zoom: document.getElementById("sfxZoom"),
 	};
 
-	// Om du saknar audio-taggar -> varna, men krascha inte
+	// Warn if missing, but don't crash
 	for (const [k, el] of Object.entries(sfx)) {
 		if (!el) console.warn(`[SFX] Missing audio element: ${k}`);
 	}
 	if (!bgm) console.warn("[BGM] Missing audio element: bgm");
 	if (!soundBtn) console.warn("[BGM] Missing button: soundToggle");
 
-	// SFX-volymer (justera här)
+	// Volumes
 	if (sfx.boob) sfx.boob.volume = 0.55;
-	if (sfx.crash) sfx.crash.volume = 0.80;
-	if (sfx.yum) sfx.yum.volume = 0.70;
-	if (sfx.zoom) sfx.zoom.volume = 0.80;
+	if (sfx.crash) sfx.crash.volume = 0.8;
+	if (sfx.yum) sfx.yum.volume = 0.7;
+	if (sfx.zoom) sfx.zoom.volume = 0.8;
 
-	// BGM-volym (justera här)
 	if (bgm) bgm.volume = 0.14;
 
 	const setButton = (enabled) => {
@@ -47,7 +46,32 @@ function setupAudio() {
 		soundBtn.textContent = enabled ? "🔊" : "🔇";
 	};
 
-	// SFX ska INTE kopplas till mute: alltid spela om det går
+	// Default behavior:
+	// - If user has NEVER set the key => treat as ON (not manually muted)
+	// - If key is "0" => user muted
+	// - If key is "1" => user wants music
+	const wantsBgm = () => {
+		const raw = localStorage.getItem(SOUND_KEY);
+		return raw === null ? true : raw === "1";
+	};
+
+	const setBgmPreference = (enabled) => {
+		localStorage.setItem(SOUND_KEY, enabled ? "1" : "0");
+		setButton(enabled);
+	};
+
+	const tryStartBgm = async () => {
+		if (!bgm) return false;
+		try {
+			bgm.muted = false;
+			await bgm.play();
+			return true;
+		} catch {
+			return false;
+		}
+	};
+
+	// SFX should NOT depend on BGM state
 	let sfxPrimed = false;
 	const primeSfx = async () => {
 		if (sfxPrimed) return;
@@ -56,7 +80,6 @@ function setupAudio() {
 		const audios = Object.values(sfx).filter(Boolean);
 		for (const a of audios) {
 			try {
-				// “unlock” utan att höras
 				const prevMuted = a.muted;
 				a.muted = true;
 				a.currentTime = 0;
@@ -65,21 +88,18 @@ function setupAudio() {
 				a.currentTime = 0;
 				a.muted = prevMuted;
 			} catch {
-				// om det failar nu, försöker vi igen på nästa gesture
 				sfxPrimed = false;
 				return;
 			}
 		}
 	};
 
-	// Exponera globalt API
 	let lastBoobAt = 0;
 	window.__trakeSfx = {
 		play(name) {
 			const a = sfx[name];
 			if (!a) return;
 
-			// throttle boob så det inte blir maskingevar
 			if (name === "boob") {
 				const now = performance.now();
 				if (now - lastBoobAt < 90) return;
@@ -94,52 +114,76 @@ function setupAudio() {
 		prime: primeSfx,
 	};
 
-	// Prime SFX på första riktiga interaktion (click/keydown)
-	const primeOnGesture = () => {
-		void primeSfx();
-	};
+	// Prime SFX on first real gesture
+	const primeOnGesture = () => void primeSfx();
 	window.addEventListener("pointerdown", primeOnGesture, { capture: true });
 	window.addEventListener("keydown", primeOnGesture, { capture: true });
 
-	// === BGM toggle ===
+	// === BGM init + toggle ===
 	if (bgm && soundBtn) {
-		const wantsBgm = () => localStorage.getItem(SOUND_KEY) === "1";
-
-		const tryStartBgm = async () => {
-			try {
-				bgm.muted = false;
-				await bgm.play();
-				return true;
-			} catch {
-				return false;
-			}
-		};
-
-		// Init state
 		if (wantsBgm()) {
 			setButton(true);
 			bgm.muted = false;
-			void tryStartBgm(); // kan blockas tills gesture
+			void tryStartBgm(); // may be blocked until gesture
 		} else {
 			setButton(false);
 			bgm.muted = true;
 			bgm.pause();
 		}
 
-		// Toggle button: påverkar bara BGM
 		soundBtn.addEventListener("click", async () => {
 			if (!wantsBgm()) {
-				localStorage.setItem(SOUND_KEY, "1");
-				setButton(true);
+				// turn ON
+				setBgmPreference(true);
 				bgm.muted = false;
 				await tryStartBgm();
 			} else {
-				localStorage.setItem(SOUND_KEY, "0");
+				// turn OFF
+				setBgmPreference(false);
 				bgm.pause();
 				bgm.muted = true;
-				setButton(false);
 			}
 		});
+	}
+
+	// ✅ Start BGM on clicking Singleplayer/Multiplayer if user has NOT muted it.
+	// Works even if buttons are created dynamically or IDs differ.
+	document.addEventListener(
+		"click",
+		(e) => {
+			if (!bgm) return;
+			if (!wantsBgm()) return;
+
+			const btn = e.target?.closest?.("button");
+			if (!btn) return;
+
+			// If user is typing in an input, ignore
+			if (isTypingTarget(document.activeElement)) return;
+
+			const id = (btn.id || "").toLowerCase();
+			const txt = (btn.textContent || "").trim().toLowerCase();
+
+			const looksLikeStart =
+				id.includes("single") ||
+				id.includes("multi") ||
+				txt.includes("singleplayer") ||
+				txt.includes("single player") ||
+				txt.includes("multiplayer") ||
+				txt.includes("multi player");
+
+			if (!looksLikeStart) return;
+
+			// Start immediately on this gesture
+			bgm.muted = false;
+			bgm.play().catch(() => {});
+		},
+		true
+	);
+
+	// If key was never set, store default ON once (so UI is consistent across reloads)
+	if (localStorage.getItem(SOUND_KEY) === null) {
+		localStorage.setItem(SOUND_KEY, "1");
+		if (soundBtn) setButton(true);
 	}
 }
 
@@ -174,13 +218,12 @@ function initiate() {
 		if (isTypingTarget(event.target) || isTypingTarget(document.activeElement)) return;
 
 		const k = event.key;
-
 		if (!dirKeys.has(k)) return;
 
-		// Förhindra scroll på piltangenter
+		// Prevent scroll on arrow keys
 		if (k.startsWith("Arrow")) event.preventDefault();
 
-		// ✅ boob på styr-input (SFX är alltid på)
+		// SFX turn sound
 		window.__trakeSfx?.play("boob");
 
 		if (mp.isMultiplayerActive()) mp.handleKeyDown(k);

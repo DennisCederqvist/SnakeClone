@@ -40,6 +40,8 @@ The game features a polished singleplayer experience and an experimental multipl
   - Crashes (death)
 - Sound effects are independent from music mute
 
+- Audio made by <a href="https://github.com/bjorneboman/">Björn Bohman<a>
+
 ---
 
 ## 🏆 Leaderboard
