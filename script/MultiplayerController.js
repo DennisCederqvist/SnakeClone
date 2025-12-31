@@ -1,11 +1,9 @@
 // MultiplayerController.js
 // Host-authoritative multiplayer + smooth rendering for joiners.
 //
-// ✅ Key fix in this drop-in:
-// - Others/world render "behind" using delay => smooth.
-// - Self render with low delay to reduce input lag,
-//   BUT when self targetTick goes past the latest snapshot we EXTRAPOLATE a tiny bit
-//   (max ~0.9 tick) so self doesn't "freeze then jump".
+// ✅ Additions in this drop-in:
+// - Tie-breaker: if top score is tied => "Oavgjort" (deterministic).
+// - Match timer (mm:ss) shown during running match (HUD in UI).
 //
 // Keeps:
 // - Lobby overlay visible during countdown; hides when match starts.
@@ -34,7 +32,7 @@ const SELF_RENDER_DELAY_MS = 50;     // reduce perceived input lag
 // ✅ how far we allow self extrapolation past newest snapshot (in ticks)
 const SELF_MAX_EXTRAP_TICKS = 0.9;
 
-const MATCH_DURATION_MS = 180_000; // 3 min
+const MATCH_DURATION_MS = 120_000; // 3 min
 const RESPAWN_DELAY_MS = 3_000;
 const COUNTDOWN_MS = 3_000;
 
@@ -319,6 +317,7 @@ export class MultiplayerController {
     this._resetAllState();
 
     this.ui.setCountdown("");
+    this.ui.setMatchTimer(""); // ✅ clear HUD timer
     this.ui.setLobbyPlayers([]);
     this.ui.setLobbyCode("");
     this.ui.hideLobby();
@@ -339,6 +338,7 @@ export class MultiplayerController {
     this.matchEndTick = null;
 
     this.ui.setCountdown("");
+    this.ui.setMatchTimer(""); // ✅ clear HUD timer
     this.ui.hideWinner();
     this.ui.showLobby();
     this.ui.setLobbyCode(this.sessionId);
@@ -468,8 +468,8 @@ export class MultiplayerController {
           }
         }
 
-        // Winner
-        if (snap.matchState === "ended" && snap.winner) {
+        // Winner (supports draw via winnerName)
+        if (snap.matchState === "ended" && typeof snap.winnerName === "string") {
           this._showWinnerFromSnapshot(snap);
         }
         break;
@@ -671,7 +671,6 @@ export class MultiplayerController {
   }
 
   _hostTick() {
-    // unchanged from your host-authoritative sim...
     if (this.matchState === "countdown") {
       const elapsed = this.tick - (this.countdownStartTick ?? this.tick);
       const remaining = Math.max(0, COUNTDOWN_TICKS - elapsed);
@@ -715,23 +714,30 @@ export class MultiplayerController {
     }
 
     if (this.matchState === "ended") {
+      // ✅ Deterministic tie-breaker: draw if multiple share top score
       const scores = this.rosterIds.map((id) => ({
         id,
         name: this.players.get(id)?.name ?? "Player",
         score: Number(this.players.get(id)?.score ?? 0),
       }));
+
       scores.sort((a, b) => b.score - a.score);
-      const winner = scores[0] ?? null;
+
+      const topScore = scores[0]?.score ?? 0;
+      const top = scores.filter((s) => s.score === topScore);
+      const winnerName = top.length >= 2 ? "Tie" : (scores[0]?.name ?? "");
 
       const snap = this._buildSnapshotHost();
       snap.matchState = "ended";
-      snap.winner = winner;
+      snap.winnerName = winnerName; // ✅ used by clients
+      snap.winners = top.map((t) => ({ name: t.name, score: t.score })); // optional, informative
 
       this.api.transmit({ type: "snapshot", snapshot: snap });
       this.api.transmit({
         type: "winner",
-        winnerName: winner?.name ?? "",
+        winnerName,
         scores: scores.map((s) => ({ name: s.name, score: s.score })),
+        winners: top.map((t) => ({ name: t.name, score: t.score })), // optional
       });
 
       return;
@@ -1118,7 +1124,7 @@ export class MultiplayerController {
     // If we're beyond newest snapshot:
     if (bIndex === -1) {
       if (!allowExtrap) {
-        // clamp to newest => causes "freeze then jump" (what you saw)
+        // clamp to newest => causes "freeze then jump"
         bIndex = this._snapBuf.length - 1;
         const a = this._snapBuf[Math.max(0, bIndex - 1)];
         return { a, b: this._snapBuf[bIndex], t: 1 };
@@ -1131,7 +1137,7 @@ export class MultiplayerController {
       const span = Math.max(1, b.tick - a.tick);
 
       const extra = Math.min(maxExtrapTicks, Math.max(0, targetTick - b.tick));
-      const t = 1 + extra / span; // t in [1, 1+...]
+      const t = 1 + extra / span;
 
       return { a, b, t };
     }
@@ -1151,7 +1157,7 @@ export class MultiplayerController {
   // Render
   // --------------------
   _render(now) {
-    // Countdown text
+    // Countdown text (lobby)
     if (this.matchState === "countdown" && this.countdownStartTick != null) {
       const hostTickEstimate = this._estimateHostTick(now);
       const elapsed = hostTickEstimate - this.countdownStartTick;
@@ -1159,8 +1165,21 @@ export class MultiplayerController {
       const remainingSec = Math.ceil((remainingTicks * TICK_MS) / 1000);
       this.ui.setCountdown(remainingSec > 0 ? String(remainingSec) : "GO!");
       if (remainingTicks === 0) this.ui.setCountdown("");
+      this.ui.setMatchTimer(""); // ✅ no match timer during countdown
     } else if (this.matchState === "running") {
+      // ✅ Match timer HUD (mm:ss)
+      if (this.matchEndTick != null) {
+        const hostTickEstimate = this._estimateHostTick(now);
+        const ticksLeft = Math.max(0, (this.matchEndTick ?? 0) - hostTickEstimate);
+        const msLeft = ticksLeft * TICK_MS;
+        this.ui.setMatchTimer(formatMMSS(msLeft));
+      } else {
+        this.ui.setMatchTimer("");
+      }
       this.ui.setCountdown("");
+    } else {
+      this.ui.setCountdown("");
+      this.ui.setMatchTimer("");
     }
 
     if (this.isHost) {
@@ -1172,8 +1191,6 @@ export class MultiplayerController {
     }
 
     // CLIENT:
-    // - World + others: delayed for smoothness
-    // - Self: low delay + slight extrapolation for smoothness (no freeze/jump)
     const pickedOthers = this._pickSnapshotsForRender(
       now,
       this._othersDelayTicks,
@@ -1292,7 +1309,7 @@ export class MultiplayerController {
       name: p.name ?? "Player",
       score: Number(p.score ?? 0),
     }));
-    const winnerName = snap.winner?.name ?? "";
+    const winnerName = typeof snap.winnerName === "string" ? snap.winnerName : "";
     this.ui.showWinnerBoard({ winnerName, scores });
   }
 
@@ -1364,7 +1381,6 @@ function keyToDir(key) {
   }
 }
 
-
 function isCardinal(dir) {
   return (
     (dir.x === 1 && dir.y === 0) ||
@@ -1411,4 +1427,12 @@ function interpolateSegments(prevSegs, nextSegs, t) {
   }
 
   return out;
+}
+
+// ✅ mm:ss formatter (ms can be float)
+function formatMMSS(ms) {
+  const totalSec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }

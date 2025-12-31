@@ -43,6 +43,9 @@ export class UiManager {
 
 		this._ensureArcadeStyles();
 
+		// ✅ Match timer HUD (always visible during match)
+		this.matchTimerEl = this._ensureMatchTimerHud();
+
 		this.startButton?.addEventListener("click", () => {
 			this.hideStartScreen();
 			this.game.startGame();
@@ -197,13 +200,27 @@ export class UiManager {
 		this.countdownEl.textContent = text ?? "";
 	}
 
+	// ✅ Match timer HUD (visible during match)
+	setMatchTimer(text) {
+		if (!this.matchTimerEl) return;
+		const t = String(text ?? "").trim();
+		this.matchTimerEl.textContent = t ? `⏱ ${t}` : "";
+		this.matchTimerEl.style.display = t ? "block" : "none";
+	}
+
 	// Winner UI
 	showWinnerBoard({ winnerName, scores }) {
 		this.hideLobby();
 		this.hideDeathScreen();
 
+		// Clear match timer when winner screen shows
+		this.setMatchTimer("");
+
 		if (this.winnerTitleEl) {
-			this.winnerTitleEl.textContent = winnerName ? `Winner: ${winnerName}` : "Winner";
+			const w = String(winnerName ?? "").trim();
+			if (!w) this.winnerTitleEl.textContent = "Winner";
+			else if (w === "Tie") this.winnerTitleEl.textContent = "Tie!";
+			else this.winnerTitleEl.textContent = `Winner: ${w}`;
 		}
 
 		if (this.winnerListEl) {
@@ -253,13 +270,11 @@ export class UiManager {
 			};
 
 			inputs.forEach((inp, idx) => {
-				// QoL: när man fokuserar en ruta, markera allt (om något finns)
 				inp.addEventListener("focus", () => inp.select());
 
 				inp.addEventListener("input", () => {
 					inp.value = sanitizeChar(inp.value).slice(0, 1);
 
-					// Auto-advance + select nästa så man bara kan skriva direkt
 					if (inp.value && idx < inputs.length - 1) {
 						inputs[idx + 1].focus();
 						inputs[idx + 1].select();
@@ -280,7 +295,6 @@ export class UiManager {
 				});
 			});
 
-			// Starta på första rutan, tom value (placeholder visar A)
 			inputs[0].value = "";
 			inputs[1].value = "";
 			inputs[2].value = "";
@@ -341,6 +355,35 @@ export class UiManager {
 }
 `;
 		document.head.appendChild(style);
+	}
+
+	// ✅ Create a small HUD timer (so it shows even when lobby is hidden)
+	_ensureMatchTimerHud() {
+		const existing = document.getElementById("matchTimerHud");
+		if (existing) return existing;
+
+		const el = document.createElement("div");
+		el.id = "matchTimerHud";
+		el.textContent = "";
+		el.style.position = "fixed";
+		el.style.top = "10px";
+		el.style.right = "12px";
+		el.style.zIndex = "9998";
+		el.style.padding = "8px 10px";
+		el.style.borderRadius = "10px";
+		el.style.border = "1px solid rgba(0,255,255,0.25)";
+		el.style.background = "rgba(8,10,12,0.70)";
+		el.style.boxShadow = "0 0 18px rgba(0,255,255,0.12)";
+		el.style.fontWeight = "800";
+		el.style.letterSpacing = "1px";
+		el.style.fontSize = "14px";
+		el.style.color = "rgba(220,255,255,0.95)";
+		el.style.display = "none";
+		el.style.userSelect = "none";
+		el.style.pointerEvents = "none";
+
+		document.body.appendChild(el);
+		return el;
 	}
 }
 
