@@ -390,10 +390,12 @@ export class Game {
 
       if (picked.type === PowerUpType.BONUS) {
 		window.__trakeSfx?.play("yum");
+		window.__trakeSfx?.play("plus100");
         this.score += SPECIAL.BONUS_SCORE;
         this.updateScore();
       } else if (picked.type === PowerUpType.MIRROR) {
 		window.__trakeSfx?.play("yum");
+		window.__trakeSfx?.play("mirrored");
         this.mirroredUntil = Math.max(this.mirroredUntil, this.now + SPECIAL.MIRROR_EFFECT_MS);
       }
     }
@@ -405,6 +407,7 @@ export class Game {
         case PowerUpType.SPEED:
           this.powerUps.activate(PowerUpType.SPEED, this.now, EFFECT.SPEED_MS);
 		  window.__trakeSfx?.play("zoom");
+		  window.__trakeSfx?.play("speed");
           break;
         case PowerUpType.SLOW:
           this.powerUps.activate(PowerUpType.SLOW, this.now, EFFECT.SLOW_MS);
@@ -413,6 +416,7 @@ export class Game {
         case PowerUpType.GHOST:
           this.powerUps.activate(PowerUpType.GHOST, this.now, EFFECT.GHOST_MS);
 		  window.__trakeSfx?.play("yum");
+		  window.__trakeSfx?.play("ghosting");
           break;
         case PowerUpType.SHRINK:
           this.snake.shrink(EFFECT.SHRINK_AMOUNT, EFFECT.MIN_SNAKE_LEN);
